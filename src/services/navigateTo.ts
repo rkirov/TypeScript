@@ -16,6 +16,7 @@ namespace ts.NavigateTo {
             const nameToDeclarations = sourceFile.getNamedDeclarations();
             for (const name in nameToDeclarations) {
                 const declarations = getProperty(nameToDeclarations, name);
+                if (!declarations) throw new Error("???");
                 if (declarations) {
                     // First do a quick check to see if the name of the declaration matches the 
                     // last portion of the (possibly) dotted name they're searching for.
@@ -47,6 +48,34 @@ namespace ts.NavigateTo {
                     }
                 }
             }
+        });
+
+        // Remove imports when the imported declarations are already in the list
+        rawItems = filter(rawItems, (item: RawNavigateToItem) => {
+            const decl: Declaration = item.declaration;
+            const isImport = decl.kind === SyntaxKind.ImportClause || decl.kind === SyntaxKind.ImportSpecifier; // TODO: other types of import exist
+            if (isImport) {
+                // TOOD: move to core?
+                function find<T>(array: T[], predicate: (elem: T) => boolean) {
+                    for (let i = 0; i < array.length; i++) {
+                        const elem = array[i];
+                        if (predicate(elem))
+                            return elem;
+                    }
+                    return undefined;
+                }
+
+                const realDeclaration = find(rawItems, (otherItem: RawNavigateToItem) => {
+                    if (otherItem === item) {
+                        return false;
+                    }
+                    // TODO: look for declaration that actually is what the import points to
+                    // KLUDGE: look for decl with same name.
+                    return otherItem.name === item.name;
+                });
+                return realDeclaration === undefined;
+            }
+            return true;
         });
 
         rawItems.sort(compareNavigateToItems);
