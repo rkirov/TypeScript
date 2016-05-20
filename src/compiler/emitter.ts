@@ -5398,10 +5398,10 @@ const _super = (function (geti, seti) {
                         //
                         //  TypeScript                      | Javascript
                         //  --------------------------------|------------------------------------
-                        //  @dec                            | let C_1;
-                        //  export default class C {        | let C = C_1 = class C {
+                        //  @dec                            | let C;
+                        //  export default class C {        | let C_1 = class C {
                         //    static x() { return C.y; }    |   static x() { return C_1.y; }
-                        //    static y = 1;                 | }
+                        //    static y = 1;                 | }; C = C_1;
                         //  }                               | C.y = 1;
                         //                                  | C = C_1 = __decorate([dec], C);
                         //                                  | export default C;
@@ -5415,20 +5415,22 @@ const _super = (function (geti, seti) {
                         if (isDecorated && resolver.getNodeCheckFlags(node) & NodeCheckFlags.ClassWithBodyScopedClassBinding) {
                             decoratedClassAlias = unescapeIdentifier(makeUniqueName(node.name ? node.name.text : "default"));
                             decoratedClassAliases[getNodeId(node)] = decoratedClassAlias;
-                            write(`let ${decoratedClassAlias};`);
+                            if (isES6ExportedDeclaration(node) && !(node.flags & NodeFlags.Default)) {
+                                write("export ");
+                            }
+                            write(`let `);
+                            emitDeclarationName(node);
+                            write(`;`);
                             writeLine();
-                        }
-
-                        if (isES6ExportedDeclaration(node) && !(node.flags & NodeFlags.Default)) {
-                            write("export ");
                         }
 
                         if (!isHoistedDeclarationInSystemModule) {
                             write("let ");
                         }
-                        emitDeclarationName(node);
                         if (decoratedClassAlias !== undefined) {
-                            write(` = ${decoratedClassAlias}`);
+                            write(`${decoratedClassAlias}`);
+                        } else {
+                            emitDeclarationName(node);
                         }
 
                         write(" = ");
@@ -5490,6 +5492,11 @@ const _super = (function (geti, seti) {
                 emitToken(SyntaxKind.CloseBraceToken, node.members.end);
 
                 if (rewriteAsClassExpression) {
+                    if (decoratedClassAlias !== undefined) {
+                        write('; ');
+                        emitDeclarationName(node);
+                        write(` = ${decoratedClassAlias}`);
+                    }
                     decoratedClassAliases[getNodeId(node)] = undefined;
                     write(";");
                 }
