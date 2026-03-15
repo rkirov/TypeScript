@@ -199,16 +199,21 @@ function mapRight<F : (*, *) -> *, A, B, C>(
   higherOrder: `// Higher-order kinds: type constructors that
 // take other type constructors as arguments
 
-// (* -> *) -> * : takes a container type, returns a type
-type StringsIn<F : * -> *> = F<string>;
+// (* -> *) -> * : a type parameterized by a constructor
+// "Apply any container to string"
+type ApplyString<G : * -> *> = G<string>;
 
-type T1 = StringsIn<Array>;    // string[]
-type T2 = StringsIn<Promise>;  // Promise<string>
+type T1 = ApplyString<Array>;    // string[]
+type T2 = ApplyString<Promise>;  // Promise<string>
 const t1: T1 = ["hello"];
 const t2: T2 = Promise.resolve("hello");
 
+// An interface with a (* -> *) -> * parameter
+interface FunctorOf<F : (* -> *) -> *> {
+  get<G : * -> *>(): F<G>;
+}
+
 // Natural transformation: maps between * -> * constructors
-// Both F and G are kind * -> *
 interface Nat<F : * -> *, G : * -> *> {
   transform<A>(fa: F<A>): G<A>;
 }
