@@ -196,46 +196,49 @@ function mapRight<F : (*, *) -> *, A, B, C>(
   return bi.bimap(fa, a => a, g);
 }`,
 
-  higherOrder: `// (* -> *) -> * — constructors that take constructors
+  higherOrder: `// Higher-order kinds: type constructors that
+// take other type constructors as arguments
 
-// Apply any * -> * constructor to number
-type ApplyToNumber<F : * -> *> = F<number>;
+// (* -> *) -> * : takes a container type, returns a type
+type StringsIn<F : * -> *> = F<string>;
 
-type T1 = ApplyToNumber<Array>;    // number[]
-type T2 = ApplyToNumber<Promise>;  // Promise<number>
+type T1 = StringsIn<Array>;    // string[]
+type T2 = StringsIn<Promise>;  // Promise<string>
+const t1: T1 = ["hello"];
+const t2: T2 = Promise.resolve("hello");
 
-const t1: T1 = [1, 2, 3];
-const t2: T2 = Promise.resolve(42);
-
-// A natural transformation between two functors
-interface NaturalTransformation<F : * -> *, G : * -> *> {
+// Natural transformation: maps between * -> * constructors
+// Both F and G are kind * -> *
+interface Nat<F : * -> *, G : * -> *> {
   transform<A>(fa: F<A>): G<A>;
 }
 
 type Box<A> = { value: A };
+type Id<A> = A;
 
-// Box ~> Array: unwrap and put in a singleton array
-const boxToArray: NaturalTransformation<Box, Array> = {
+const boxToArray: Nat<Box, Array> = {
   transform: (fa) => [fa.value],
 };
 
-const result = boxToArray.transform({ value: 42 });
-// result: number[]
-
-// Nested kinds in type aliases
-type Wrapped<F : * -> *, A> = {
-  inner: F<A>;
-  tag: string;
+const unbox: Nat<Box, Id> = {
+  transform: (fa) => fa.value,
 };
 
-const w1: Wrapped<Box, number> = {
-  inner: { value: 99 },
-  tag: "boxed",
-};
-const w2: Wrapped<Array, string> = {
-  inner: ["a", "b"],
-  tag: "listed",
-};`,
+// Compose two natural transformations
+// F, G, H are all kind * -> *
+function composeNat<F : * -> *, G : * -> *, H : * -> *>(
+  fg: Nat<F, G>,
+  gh: Nat<G, H>,
+): Nat<F, H> {
+  return {
+    transform: (fa) => gh.transform(fg.transform(fa)),
+  };
+}
+
+// Box ~> Array ~> Id composed into Box ~> Id
+const boxToId = composeNat(boxToArray, {
+  transform: (fa) => fa[0],
+});`,
 
   errors: `interface Functor<F : * -> *> {
   map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
