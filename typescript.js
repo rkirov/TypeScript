@@ -10220,6 +10220,7 @@ var Diagnostics = {
   This_expression_is_never_nullish: diag(2881, 1 /* Error */, "This_expression_is_never_nullish_2881", "This expression is never nullish."),
   Cannot_find_module_or_type_declarations_for_side_effect_import_of_0: diag(2882, 1 /* Error */, "Cannot_find_module_or_type_declarations_for_side_effect_import_of_0_2882", "Cannot find module or type declarations for side-effect import of '{0}'."),
   The_inferred_type_of_0_cannot_be_named_without_a_reference_to_2_from_1_This_is_likely_not_portable_A_type_annotation_is_necessary: diag(2883, 1 /* Error */, "The_inferred_type_of_0_cannot_be_named_without_a_reference_to_2_from_1_This_is_likely_not_portable_A_2883", "The inferred type of '{0}' cannot be named without a reference to '{2}' from '{1}'. This is likely not portable. A type annotation is necessary."),
+  Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk: diag(2900, 1 /* Error */, "Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk_2900", "Higher-order kinds are not yet supported. All kind parameters and return must be '*'."),
   Import_declaration_0_is_using_private_name_1: diag(4e3, 1 /* Error */, "Import_declaration_0_is_using_private_name_1_4000", "Import declaration '{0}' is using private name '{1}'."),
   Type_parameter_0_of_exported_class_has_or_is_using_private_name_1: diag(4002, 1 /* Error */, "Type_parameter_0_of_exported_class_has_or_is_using_private_name_1_4002", "Type parameter '{0}' of exported class has or is using private name '{1}'."),
   Type_parameter_0_of_exported_interface_has_or_is_using_private_name_1: diag(4004, 1 /* Error */, "Type_parameter_0_of_exported_interface_has_or_is_using_private_name_1_4004", "Type parameter '{0}' of exported interface has or is using private name '{1}'."),
@@ -25960,6 +25961,7 @@ function createNodeFactory(flags, baseFactory2) {
     node.transformFlags = 1 /* ContainsTypeScript */;
     node.expression = void 0;
     node.kindArity = void 0;
+    node.kindNode = void 0;
     node.jsDoc = void 0;
     return node;
   }
@@ -35129,8 +35131,10 @@ var Parser;
     );
     const name = parseIdentifier();
     let kindArity;
+    let kindNode;
     if (parseOptional(59 /* ColonToken */)) {
-      kindArity = parseKindAnnotation();
+      kindNode = parseKind();
+      kindArity = kindNodeToArity(kindNode);
     }
     let constraint;
     let expression;
@@ -35145,16 +35149,52 @@ var Parser;
     const node = factory2.createTypeParameterDeclaration(modifiers, name, constraint, defaultType);
     node.expression = expression;
     node.kindArity = kindArity;
+    node.kindNode = kindNode;
     return finishNode(node, pos);
   }
-  function parseKindAnnotation() {
-    parseExpected(42 /* AsteriskToken */);
-    let arity = 0;
-    while (token() === 41 /* MinusToken */) {
+  function parseKind() {
+    const atom = parseKindAtom();
+    if (token() === 41 /* MinusToken */) {
       nextToken();
       parseExpected(32 /* GreaterThanToken */);
-      parseExpected(42 /* AsteriskToken */);
-      arity++;
+      const returnKind = parseKind();
+      return { kindTag: "arrow", params: [atom], returnKind };
+    }
+    return atom;
+  }
+  function parseKindAtom() {
+    if (parseOptional(42 /* AsteriskToken */)) {
+      return { kindTag: "star" };
+    }
+    if (parseExpected(21 /* OpenParenToken */)) {
+      const first2 = parseKind();
+      const params = [first2];
+      while (parseOptional(28 /* CommaToken */)) {
+        params.push(parseKind());
+      }
+      parseExpected(22 /* CloseParenToken */);
+      if (params.length === 1) {
+        return first2;
+      }
+      if (token() !== 41 /* MinusToken */) {
+        return { kindTag: "arrow", params, returnKind: { kindTag: "star" } };
+      }
+      nextToken();
+      parseExpected(32 /* GreaterThanToken */);
+      const returnKind = parseKind();
+      return { kindTag: "arrow", params, returnKind };
+    }
+    return { kindTag: "star" };
+  }
+  function kindNodeToArity(kind) {
+    if (kind.kindTag === "star") return 0;
+    let arity = 0;
+    for (const p of kind.params) {
+      if (p.kindTag === "star") {
+        arity++;
+      } else {
+        arity++;
+      }
     }
     return arity;
   }
@@ -54789,6 +54829,68 @@ function createTypeChecker(host) {
   function createTypeParameter(symbol) {
     return createTypeWithSymbol(524288 /* TypeParameter */, symbol);
   }
+  function getStarKind() {
+    return { kindTag: "star" };
+  }
+  function kindsMatch(expected, actual) {
+    if (expected.kindTag === "star" && actual.kindTag === "star") return true;
+    if (expected.kindTag === "arrow" && actual.kindTag === "arrow") {
+      if (expected.params.length !== actual.params.length) return false;
+      for (let i = 0; i < expected.params.length; i++) {
+        if (!kindsMatch(expected.params[i], actual.params[i])) return false;
+      }
+      return kindsMatch(expected.returnKind, actual.returnKind);
+    }
+    return false;
+  }
+  function getKindOfType(type) {
+    if (type.flags & 524288 /* TypeParameter */ && type.kindNode) {
+      return type.kindNode;
+    }
+    if (type.flags & 524288 /* TypeParameter */ && type.kindArity) {
+      const arity = type.kindArity;
+      return { kindTag: "arrow", params: Array(arity).fill(getStarKind()), returnKind: getStarKind() };
+    }
+    return getStarKind();
+  }
+  function getKindOfSymbol(symbol) {
+    if (symbol.flags & (32 /* Class */ | 64 /* Interface */)) {
+      const declType = getDeclaredTypeOfSymbol(getMergedSymbol(symbol));
+      const arity = length(declType.localTypeParameters);
+      if (arity === 0) return getStarKind();
+      const params = [];
+      for (const tp of declType.localTypeParameters) {
+        params.push(getKindOfType(tp));
+      }
+      return { kindTag: "arrow", params, returnKind: getStarKind() };
+    }
+    if (symbol.flags & 524288 /* TypeAlias */) {
+      const typeParams = getSymbolLinks(symbol).typeParameters;
+      const arity = length(typeParams);
+      if (arity === 0) return getStarKind();
+      const params = [];
+      for (const tp of typeParams) {
+        params.push(getKindOfType(tp));
+      }
+      return { kindTag: "arrow", params, returnKind: getStarKind() };
+    }
+    if (symbol.flags & 262144 /* TypeParameter */) {
+      const typeParam = getDeclaredTypeOfSymbol(symbol);
+      return getKindOfType(typeParam);
+    }
+    return getStarKind();
+  }
+  function kindToString(kind) {
+    if (kind.kindTag === "star") return "*";
+    const params = kind.params;
+    const ret = kindToString(kind.returnKind);
+    if (params.length === 1) {
+      const p = kindToString(params[0]);
+      const paramStr = params[0].kindTag === "arrow" ? `(${p})` : p;
+      return `${paramStr} -> ${ret}`;
+    }
+    return `(${params.map(kindToString).join(", ")}) -> ${ret}`;
+  }
   function createTypeConstructorRef(constructorSymbol) {
     const type = createType(16777216 /* Substitution */);
     type.baseType = errorType;
@@ -54824,29 +54926,25 @@ function createTypeChecker(host) {
     }
     return errorType;
   }
-  function resolveTypeConstructorArgument(node, expectedArity) {
+  function resolveTypeConstructorArgument(node, expectedKind) {
     if (isTypeReferenceNode(node) && !node.typeArguments) {
       const symbol = resolveTypeReferenceName(node, 788968 /* Type */);
       if (symbol && symbol !== unknownSymbol) {
-        let arity = 0;
-        if (symbol.flags & (32 /* Class */ | 64 /* Interface */)) {
-          const declType = getDeclaredTypeOfSymbol(getMergedSymbol(symbol));
-          arity = length(declType.localTypeParameters);
-        } else if (symbol.flags & 524288 /* TypeAlias */) {
-          arity = length(getSymbolLinks(symbol).typeParameters);
-        } else if (symbol.flags & 262144 /* TypeParameter */) {
+        if (symbol.flags & 262144 /* TypeParameter */) {
           const typeParam = getDeclaredTypeOfSymbol(symbol);
-          if (typeParam.kindArity === expectedArity) {
+          if (kindsMatch(expectedKind, getKindOfType(typeParam))) {
             return typeParam;
           }
-        }
-        if (arity === expectedArity) {
-          return createTypeConstructorRef(symbol);
+        } else {
+          const actualKind = getKindOfSymbol(symbol);
+          if (kindsMatch(expectedKind, actualKind)) {
+            return createTypeConstructorRef(symbol);
+          }
         }
       }
     }
     const resolvedType = getTypeFromTypeNode(node);
-    if (resolvedType.flags & 524288 /* TypeParameter */ && resolvedType.kindArity === expectedArity) {
+    if (resolvedType.flags & 524288 /* TypeParameter */ && kindsMatch(expectedKind, getKindOfType(resolvedType))) {
       return resolvedType;
     }
     return getTypeFromTypeNode(node);
@@ -62215,6 +62313,7 @@ function createTypeChecker(host) {
       const decl = symbol.declarations && symbol.declarations[0];
       if (decl && decl.kind === 169 /* TypeParameter */) {
         type.kindArity = decl.kindArity;
+        type.kindNode = decl.kindNode;
       }
       links.declaredType = type;
     }
@@ -64962,11 +65061,20 @@ function createTypeChecker(host) {
           true
         );
         if (parentSymbol && parentSymbol !== unknownSymbol) {
+          if (parentSymbol.flags & 262144 /* TypeParameter */) {
+            const tp = getDeclaredTypeOfSymbol(parentSymbol);
+            if (tp.kindNode && tp.kindNode.kindTag === "arrow" && index < tp.kindNode.params.length) {
+              const paramKind = tp.kindNode.params[index];
+              return paramKind.kindTag !== "star";
+            }
+            return false;
+          }
           let typeParams;
           if (parentSymbol.flags & (32 /* Class */ | 64 /* Interface */)) {
             const parentType = getDeclaredTypeOfSymbol(getMergedSymbol(parentSymbol));
             typeParams = parentType.localTypeParameters;
           } else if (parentSymbol.flags & 524288 /* TypeAlias */) {
+            getDeclaredTypeOfSymbol(parentSymbol);
             typeParams = getSymbolLinks(parentSymbol).typeParameters;
           }
           if (typeParams && typeParams[index] && typeParams[index].kindArity && typeParams[index].kindArity > 0) {
@@ -65378,7 +65486,8 @@ function createTypeChecker(host) {
     for (let i = 0; i < node.typeArguments.length; i++) {
       const tp = typeParameters[i];
       if (tp && tp.kindArity && tp.kindArity > 0) {
-        result.push(resolveTypeConstructorArgument(node.typeArguments[i], tp.kindArity));
+        const expectedKind = tp.kindNode || { kindTag: "arrow", params: Array(tp.kindArity).fill(getStarKind()), returnKind: getStarKind() };
+        result.push(resolveTypeConstructorArgument(node.typeArguments[i], expectedKind));
       } else {
         result.push(getTypeFromTypeNode(node.typeArguments[i]));
       }
@@ -85976,10 +86085,15 @@ function createTypeChecker(host) {
     }
     return errorType;
   }
+  function checkKindNodeSupported(_node, _kind) {
+  }
   function checkTypeParameter(node) {
     checkGrammarModifiers(node);
     if (node.expression) {
       grammarErrorOnFirstToken(node.expression, Diagnostics.Type_expected);
+    }
+    if (node.kindNode) {
+      checkKindNodeSupported(node, node.kindNode);
     }
     checkSourceElement(node.constraint);
     checkSourceElement(node.default);
