@@ -502,9 +502,21 @@ loaderScript.onload = () => {
                 } else if (ts.isPropertySignature(decl) || ts.isPropertyDeclaration(decl)) {
                   display = '(property) ' + symbolName + ': ' + typeString;
                 } else if (ts.isTypeParameterDeclaration(decl)) {
-                  const kindArity = decl.kindArity;
-                  if (kindArity && kindArity > 0) {
-                    const stars = Array(kindArity + 1).fill('*').join(' -> ');
+                  const kindNode = decl.kindNode;
+                  if (kindNode && kindNode.kindTag !== 'star') {
+                    function kindToStr(k) {
+                      if (k.kindTag === 'star') return '*';
+                      const params = k.params;
+                      const ret = kindToStr(k.returnKind);
+                      if (params.length === 1) {
+                        const p = kindToStr(params[0]);
+                        return (params[0].kindTag === 'arrow' ? '(' + p + ')' : p) + ' -> ' + ret;
+                      }
+                      return '(' + params.map(kindToStr).join(', ') + ') -> ' + ret;
+                    }
+                    display = '(type parameter) ' + symbolName + ' : ' + kindToStr(kindNode);
+                  } else if (decl.kindArity && decl.kindArity > 0) {
+                    const stars = Array(decl.kindArity + 1).fill('*').join(' -> ');
                     display = '(type parameter) ' + symbolName + ' : ' + stars;
                   } else {
                     display = '(type parameter) ' + symbolName + ' in ' + typeString;
