@@ -47,6 +47,8 @@
   <div class="examples">
     <button onclick="loadExample('functor')">Functor</button>
     <button onclick="loadExample('monad')">Monad</button>
+    <button onclick="loadExample('bifunctor')">Bifunctor</button>
+    <button onclick="loadExample('higherOrder')">Higher-Order</button>
     <button onclick="loadExample('sequence')">Sequence</button>
     <button onclick="loadExample('errors')">Errors</button>
   </div>
@@ -159,6 +161,81 @@ const result = sequence(
   boxMonad,
   [{ value: 1 }, { value: 2 }, { value: 3 }],
 );`,
+
+  bifunctor: `// (*, *) -> * — type constructors with two arguments
+
+interface Bifunctor<F : (*, *) -> *> {
+  bimap<A, B, C, D>(
+    fa: F<A, B>,
+    f: (a: A) => C,
+    g: (b: B) => D,
+  ): F<C, D>;
+}
+
+// A simple pair type: kind (*, *) -> *
+type Pair<A, B> = { fst: A; snd: B };
+
+const pairBifunctor: Bifunctor<Pair> = {
+  bimap: (fa, f, g) => ({ fst: f(fa.fst), snd: g(fa.snd) }),
+};
+
+// Map both sides of a pair
+const p = pairBifunctor.bimap(
+  { fst: 1, snd: "hello" },
+  n => n * 2,
+  s => s.length,
+);
+// p: Pair<number, number>
+
+// Also works with generic code
+function mapRight<F : (*, *) -> *, A, B, C>(
+  bi: Bifunctor<F>,
+  fa: F<A, B>,
+  g: (b: B) => C,
+): F<A, C> {
+  return bi.bimap(fa, a => a, g);
+}`,
+
+  higherOrder: `// (* -> *) -> * — constructors that take constructors
+
+// Apply any * -> * constructor to number
+type ApplyToNumber<F : * -> *> = F<number>;
+
+type T1 = ApplyToNumber<Array>;    // number[]
+type T2 = ApplyToNumber<Promise>;  // Promise<number>
+
+const t1: T1 = [1, 2, 3];
+const t2: T2 = Promise.resolve(42);
+
+// A natural transformation between two functors
+interface NaturalTransformation<F : * -> *, G : * -> *> {
+  transform<A>(fa: F<A>): G<A>;
+}
+
+type Box<A> = { value: A };
+
+// Box ~> Array: unwrap and put in a singleton array
+const boxToArray: NaturalTransformation<Box, Array> = {
+  transform: (fa) => [fa.value],
+};
+
+const result = boxToArray.transform({ value: 42 });
+// result: number[]
+
+// Nested kinds in type aliases
+type Wrapped<F : * -> *, A> = {
+  inner: F<A>;
+  tag: string;
+};
+
+const w1: Wrapped<Box, number> = {
+  inner: { value: 99 },
+  tag: "boxed",
+};
+const w2: Wrapped<Array, string> = {
+  inner: ["a", "b"],
+  tag: "listed",
+};`,
 
   errors: `interface Functor<F : * -> *> {
   map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
