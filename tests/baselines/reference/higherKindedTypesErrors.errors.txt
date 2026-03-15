@@ -1,0 +1,41 @@
+higherKindedTypesErrors.ts(7,16): error TS2558: Expected 1 type arguments, but got 2.
+higherKindedTypesErrors.ts(12,19): error TS2322: Type 'B' is not assignable to type 'B[]'.
+higherKindedTypesErrors.ts(17,3): error TS2322: Type 'A' is not assignable to type 'B'.
+  'B' could be instantiated with an arbitrary type which could be unrelated to 'A'.
+
+
+==== higherKindedTypesErrors.ts (3 errors) ====
+    interface Functor<F : * -> *> {
+      map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+    }
+    
+    // Error: wrong number of type arguments to constructor param
+    interface BadArity<F : * -> *> {
+      bar<A, B>(x: F<A, B>): void;  // F expects 1 arg, got 2
+                   ~~~~~~~
+!!! error TS2558: Expected 1 type arguments, but got 2.
+    }
+    
+    // Incorrect implementation of an HKT interface
+    const badArrayFunctor: Functor<Array> = {
+      map: (fa, f) => f(fa[0]),  // returns B, not Array<B>
+                      ~~~~~~~~
+!!! error TS2322: Type 'B' is not assignable to type 'B[]'.
+!!! related TS2208 higherKindedTypesErrors.ts:2:10: This type parameter might need an `extends B[]` constraint.
+!!! related TS6502 higherKindedTypesErrors.ts:2:3: The expected type comes from the return type of this signature.
+    };
+    
+    // Invariance: F<A> is not assignable to F<B>
+    function bad<F : * -> *, A, B>(fa: F<A>): F<B> {
+      return fa;  // Error
+      ~~~~~~
+!!! error TS2322: Type 'A' is not assignable to type 'B'.
+!!! error TS2322:   'B' could be instantiated with an arbitrary type which could be unrelated to 'A'.
+!!! related TS2208 higherKindedTypesErrors.ts:16:26: This type parameter might need an `extends B` constraint.
+    }
+    
+    // Same type argument on both sides is fine
+    function fine<F : * -> *, A>(fa: F<A>): F<A> {
+      return fa;
+    }
+    

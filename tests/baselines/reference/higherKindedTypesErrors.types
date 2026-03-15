@@ -1,0 +1,77 @@
+//// [tests/cases/compiler/higherKindedTypesErrors.ts] ////
+
+=== higherKindedTypesErrors.ts ===
+interface Functor<F : * -> *> {
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : <A, B>(fa: F<A>, f: (a: A) => B) => F<B>
+>    : ^ ^^ ^^  ^^    ^^ ^^           ^^^^^    
+>fa : F
+>   : ^
+>f : (a: A) => B
+>  : ^ ^^ ^^^^^ 
+>a : A
+>  : ^
+}
+
+// Error: wrong number of type arguments to constructor param
+interface BadArity<F : * -> *> {
+  bar<A, B>(x: F<A, B>): void;  // F expects 1 arg, got 2
+>bar : <A, B>(x: F<A, B>) => void
+>    : ^ ^^ ^^ ^^       ^^^^^    
+>x : any
+>  : ^^^
+}
+
+// Incorrect implementation of an HKT interface
+const badArrayFunctor: Functor<Array> = {
+>badArrayFunctor : Functor<any>
+>                : ^^^^^^^^^^^^
+>{  map: (fa, f) => f(fa[0]),  // returns B, not Array<B>} : { map: <A, B>(fa: A[], f: (a: A) => B) => B; }
+>                                                          : ^^^^^^^^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^
+
+  map: (fa, f) => f(fa[0]),  // returns B, not Array<B>
+>map : <A, B>(fa: A[], f: (a: A) => B) => B
+>    : ^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^
+>(fa, f) => f(fa[0]) : <A, B>(fa: A[], f: (a: A) => B) => B
+>                    : ^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^
+>fa : A[]
+>   : ^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>f(fa[0]) : B
+>         : ^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>fa[0] : A
+>      : ^
+>fa : A[]
+>   : ^^^
+>0 : 0
+>  : ^
+
+};
+
+// Invariance: F<A> is not assignable to F<B>
+function bad<F : * -> *, A, B>(fa: F<A>): F<B> {
+>bad : <F, A, B>(fa: F<A>) => F<B>
+>    : ^ ^^ ^^ ^^  ^^    ^^^^^    
+>fa : F
+>   : ^
+
+  return fa;  // Error
+>fa : F
+>   : ^
+}
+
+// Same type argument on both sides is fine
+function fine<F : * -> *, A>(fa: F<A>): F<A> {
+>fine : <F, A>(fa: F<A>) => F<A>
+>     : ^ ^^ ^^  ^^    ^^^^^    
+>fa : F
+>   : ^
+
+  return fa;
+>fa : F
+>   : ^
+}
+

@@ -1835,6 +1835,11 @@ export interface TypeParameterDeclaration extends NamedDeclaration, JSDocContain
 
     // For error recovery purposes (see `isGrammarError` in utilities.ts).
     expression?: Expression;
+
+    // HKT kind annotation arity (e.g., `F : * -> *` has kindArity 1, `F : * -> * -> *` has kindArity 2).
+    // undefined or 0 means kind `*` (concrete type). Set by parser.
+    /** @internal */
+    kindArity?: number;
 }
 
 export interface SignatureDeclarationBase extends NamedDeclaration, JSDocContainer {
@@ -6452,6 +6457,10 @@ export interface Type {
     immediateBaseConstraint?: Type;  // Immediate base constraint cache
     /** @internal */
     widened?: Type; // Cached widened form of the type
+    /** @internal */
+    hktConstructorSymbol?: Symbol; // For TypeConstructorRef: symbol of the type constructor (e.g., Array)
+    /** @internal */
+    hktTypeArguments?: readonly Type[]; // For HKT application types: the applied type arguments (e.g., [A] in F<A>)
 }
 
 /** @internal */
@@ -6878,6 +6887,8 @@ export interface TypeParameter extends InstantiableType {
     isThisType?: boolean;
     /** @internal */
     resolvedDefaultType?: Type;
+    /** @internal */
+    kindArity?: number;  // HKT kind arity: 0 or undefined = *, 1 = * -> *, 2 = * -> * -> *, etc.
 }
 
 /** @internal */

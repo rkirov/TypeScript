@@ -1,0 +1,499 @@
+//// [tests/cases/compiler/higherKindedTypesBasic.ts] ////
+
+=== higherKindedTypesBasic.ts ===
+// Basic HKT interfaces
+interface Functor<F : * -> *> {
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : <A, B>(fa: F<A>, f: (a: A) => B) => F<B>
+>    : ^ ^^ ^^  ^^    ^^ ^^           ^^^^^    
+>fa : F
+>   : ^
+>f : (a: A) => B
+>  : ^ ^^ ^^^^^ 
+>a : A
+>  : ^
+}
+
+interface Monad<F : * -> *> extends Functor<F> {
+  pure<A>(a: A): F<A>;
+>pure : <A>(a: A) => F<A>
+>     : ^ ^^ ^^ ^^^^^    
+>a : A
+>  : ^
+
+  flatMap<A, B>(fa: F<A>, f: (a: A) => F<B>): F<B>;
+>flatMap : <A, B>(fa: F<A>, f: (a: A) => F<B>) => F<B>
+>        : ^ ^^ ^^  ^^    ^^ ^^              ^^^^^    
+>fa : F
+>   : ^
+>f : (a: A) => F<B>
+>  : ^ ^^ ^^^^^    
+>a : A
+>  : ^
+}
+
+// Concrete instantiation — Array
+const arrayFunctor: Functor<Array> = {
+>arrayFunctor : Functor<any>
+>             : ^^^^^^^^^^^^
+>{  map: (fa, f) => fa.map(f),} : { map: <A, B>(fa: A[], f: (a: A) => B) => B[]; }
+>                               : ^^^^^^^^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^
+
+  map: (fa, f) => fa.map(f),
+>map : <A, B>(fa: A[], f: (a: A) => B) => B[]
+>    : ^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>(fa, f) => fa.map(f) : <A, B>(fa: A[], f: (a: A) => B) => B[]
+>                     : ^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>fa : A[]
+>   : ^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>fa.map(f) : B[]
+>          : ^^^
+>fa.map : <U>(callbackfn: (value: A, index: number, array: A[]) => U, thisArg?: any) => U[]
+>       : ^ ^^          ^^^     ^^^^^     ^^      ^^     ^^^^^^^^^^^^^       ^^^   ^^^^^^^^
+>fa : A[]
+>   : ^^^
+>map : <U>(callbackfn: (value: A, index: number, array: A[]) => U, thisArg?: any) => U[]
+>    : ^ ^^          ^^^     ^^^^^     ^^      ^^     ^^^^^^^^^^^^^       ^^^   ^^^^^^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+
+};
+
+const arrayMonad: Monad<Array> = {
+>arrayMonad : Monad<any>
+>           : ^^^^^^^^^^
+>{  map: (fa, f) => fa.map(f),  pure: <A>(a: A): A[] => [a],  flatMap: <A, B>(fa: A[], f: (a: A) => B[]): B[] => fa.flatMap(f),} : { map: <A, B>(fa: A[], f: (a: A) => B) => B[]; pure: <A>(a: A) => A[]; flatMap: <A, B>(fa: A[], f: (a: A) => B[]) => B[]; }
+>                                                                                                                                : ^^^^^^^^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^ ^^ ^^^^^   ^^^^^^^^^^^^ ^^ ^^  ^^   ^^ ^^             ^^^^^   ^^^
+
+  map: (fa, f) => fa.map(f),
+>map : <A, B>(fa: A[], f: (a: A) => B) => B[]
+>    : ^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>(fa, f) => fa.map(f) : <A, B>(fa: A[], f: (a: A) => B) => B[]
+>                     : ^ ^^ ^^  ^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>fa : A[]
+>   : ^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>fa.map(f) : B[]
+>          : ^^^
+>fa.map : <U>(callbackfn: (value: A, index: number, array: A[]) => U, thisArg?: any) => U[]
+>       : ^ ^^          ^^^     ^^^^^     ^^      ^^     ^^^^^^^^^^^^^       ^^^   ^^^^^^^^
+>fa : A[]
+>   : ^^^
+>map : <U>(callbackfn: (value: A, index: number, array: A[]) => U, thisArg?: any) => U[]
+>    : ^ ^^          ^^^     ^^^^^     ^^      ^^     ^^^^^^^^^^^^^       ^^^   ^^^^^^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+
+  pure: <A>(a: A): A[] => [a],
+>pure : <A>(a: A) => A[]
+>     : ^ ^^ ^^ ^^^^^   
+><A>(a: A): A[] => [a] : <A>(a: A) => A[]
+>                      : ^ ^^ ^^ ^^^^^   
+>a : A
+>  : ^
+>[a] : A[]
+>    : ^^^
+>a : A
+>  : ^
+
+  flatMap: <A, B>(fa: A[], f: (a: A) => B[]): B[] => fa.flatMap(f),
+>flatMap : <A, B>(fa: A[], f: (a: A) => B[]) => B[]
+>        : ^ ^^ ^^  ^^   ^^ ^^             ^^^^^   
+><A, B>(fa: A[], f: (a: A) => B[]): B[] => fa.flatMap(f) : <A, B>(fa: A[], f: (a: A) => B[]) => B[]
+>                                                        : ^ ^^ ^^  ^^   ^^ ^^             ^^^^^   
+>fa : A[]
+>   : ^^^
+>f : (a: A) => B[]
+>  : ^ ^^ ^^^^^   
+>a : A
+>  : ^
+>fa.flatMap(f) : B[]
+>              : ^^^
+>fa.flatMap : <U, This = undefined>(callback: (this: This, value: A, index: number, array: A[]) => U | readonly U[], thisArg?: This | undefined) => U[]
+>           : ^ ^^    ^^^^^^^^^^^^^^        ^^^    ^^^^^^^^     ^^^^^     ^^      ^^     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>fa : A[]
+>   : ^^^
+>flatMap : <U, This = undefined>(callback: (this: This, value: A, index: number, array: A[]) => U | readonly U[], thisArg?: This | undefined) => U[]
+>        : ^ ^^    ^^^^^^^^^^^^^^        ^^^    ^^^^^^^^     ^^^^^     ^^      ^^     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>f : (a: A) => B[]
+>  : ^ ^^ ^^^^^   
+
+};
+
+// User-defined type constructor
+type Box<A> = { value: A };
+>Box : Box<A>
+>    : ^^^^^^
+>value : A
+>      : ^
+
+const boxFunctor: Functor<Box> = {
+>boxFunctor : Functor<any>
+>           : ^^^^^^^^^^^^
+>{  map: (fa, f) => ({ value: f(fa.value) }),} : { map: <A, B>(fa: Box<A>, f: (a: A) => B) => { value: B; }; }
+>                                              : ^^^^^^^^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  map: (fa, f) => ({ value: f(fa.value) }),
+>map : <A, B>(fa: Box<A>, f: (a: A) => B) => { value: B; }
+>    : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>(fa, f) => ({ value: f(fa.value) }) : <A, B>(fa: Box<A>, f: (a: A) => B) => { value: B; }
+>                                    : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>fa : Box<A>
+>   : ^^^^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>({ value: f(fa.value) }) : { value: B; }
+>                         : ^^^^^^^^^^^^^
+>{ value: f(fa.value) } : { value: B; }
+>                       : ^^^^^^^^^^^^^
+>value : B
+>      : ^
+>f(fa.value) : B
+>            : ^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>fa.value : A
+>         : ^
+>fa : Box<A>
+>   : ^^^^^^
+>value : A
+>      : ^
+
+};
+
+const boxMonad: Monad<Box> = {
+>boxMonad : Monad<any>
+>         : ^^^^^^^^^^
+>{  map: (fa, f) => ({ value: f(fa.value) }),  pure: (a) => ({ value: a }),  flatMap: (fa, f) => f(fa.value),} : { map: <A, B>(fa: Box<A>, f: (a: A) => B) => { value: B; }; pure: <A>(a: A) => { value: A; }; flatMap: <A, B>(fa: Box<A>, f: (a: A) => Box<B>) => Box<B>; }
+>                                                                                                              : ^^^^^^^^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  map: (fa, f) => ({ value: f(fa.value) }),
+>map : <A, B>(fa: Box<A>, f: (a: A) => B) => { value: B; }
+>    : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>(fa, f) => ({ value: f(fa.value) }) : <A, B>(fa: Box<A>, f: (a: A) => B) => { value: B; }
+>                                    : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>fa : Box<A>
+>   : ^^^^^^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>({ value: f(fa.value) }) : { value: B; }
+>                         : ^^^^^^^^^^^^^
+>{ value: f(fa.value) } : { value: B; }
+>                       : ^^^^^^^^^^^^^
+>value : B
+>      : ^
+>f(fa.value) : B
+>            : ^
+>f : (a: A) => B
+>  : ^ ^^^^^^^^^
+>fa.value : A
+>         : ^
+>fa : Box<A>
+>   : ^^^^^^
+>value : A
+>      : ^
+
+  pure: (a) => ({ value: a }),
+>pure : <A>(a: A) => { value: A; }
+>     : ^ ^^ ^^^^^^^^^^^^^^^^^^^^^
+>(a) => ({ value: a }) : <A>(a: A) => { value: A; }
+>                      : ^ ^^ ^^^^^^^^^^^^^^^^^^^^^
+>a : A
+>  : ^
+>({ value: a }) : { value: A; }
+>               : ^^^^^^^^^^^^^
+>{ value: a } : { value: A; }
+>             : ^^^^^^^^^^^^^
+>value : A
+>      : ^
+>a : A
+>  : ^
+
+  flatMap: (fa, f) => f(fa.value),
+>flatMap : <A, B>(fa: Box<A>, f: (a: A) => Box<B>) => Box<B>
+>        : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^
+>(fa, f) => f(fa.value) : <A, B>(fa: Box<A>, f: (a: A) => Box<B>) => Box<B>
+>                       : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^
+>fa : Box<A>
+>   : ^^^^^^
+>f : (a: A) => Box<B>
+>  : ^ ^^^^^^^^^^^^^^
+>f(fa.value) : Box<B>
+>            : ^^^^^^
+>f : (a: A) => Box<B>
+>  : ^ ^^^^^^^^^^^^^^
+>fa.value : A
+>         : ^
+>fa : Box<A>
+>   : ^^^^^^
+>value : A
+>      : ^
+
+};
+
+// Generic programming over any Monad
+function when<F : * -> *>(monad: Monad<F>, cond: boolean, action: F<void>): F<void> {
+>when : <F>(monad: Monad<F>, cond: boolean, action: F<void>) => F<void>
+>     : ^ ^^     ^^        ^^    ^^       ^^      ^^       ^^^^^       
+>monad : Monad<F>
+>      : ^^^^^^^^
+>cond : boolean
+>     : ^^^^^^^
+>action : F
+>       : ^
+
+  return cond ? action : monad.pure(undefined);
+>cond ? action : monad.pure(undefined) : F | F
+>                                      : ^^^^^
+>cond : boolean
+>     : ^^^^^^^
+>action : F
+>       : ^
+>monad.pure(undefined) : F
+>                      : ^
+>monad.pure : <A>(a: A) => F
+>           : ^ ^^ ^^^^^^^^^
+>monad : Monad<F>
+>      : ^^^^^^^^
+>pure : <A>(a: A) => F
+>     : ^ ^^ ^^^^^^^^^
+>undefined : undefined
+>          : ^^^^^^^^^
+}
+when(arrayMonad, true, [undefined]);
+>when(arrayMonad, true, [undefined]) : void[]
+>                                    : ^^^^^^
+>when : <F>(monad: Monad<F>, cond: boolean, action: F<void>) => F<void>
+>     : ^ ^^     ^^        ^^    ^^       ^^      ^^       ^^^^^       
+>arrayMonad : Monad<any>
+>           : ^^^^^^^^^^
+>true : true
+>     : ^^^^
+>[undefined] : undefined[]
+>            : ^^^^^^^^^^^
+>undefined : undefined
+>          : ^^^^^^^^^
+
+when(boxMonad, true, { value: undefined });
+>when(boxMonad, true, { value: undefined }) : Box<void>
+>                                           : ^^^^^^^^^
+>when : <F>(monad: Monad<F>, cond: boolean, action: F<void>) => F<void>
+>     : ^ ^^     ^^        ^^    ^^       ^^      ^^       ^^^^^       
+>boxMonad : Monad<any>
+>         : ^^^^^^^^^^
+>true : true
+>     : ^^^^
+>{ value: undefined } : { value: undefined; }
+>                     : ^^^^^^^^^^^^^^^^^^^^^
+>value : undefined
+>      : ^^^^^^^^^
+>undefined : undefined
+>          : ^^^^^^^^^
+
+// Generic lift function
+function lift<F : * -> *, A, B>(functor: Functor<F>, f: (a: A) => B): (fa: F<A>) => F<B> {
+>lift : <F, A, B>(functor: Functor<F>, f: (a: A) => B) => (fa: F<A>) => F<B>
+>     : ^ ^^ ^^ ^^       ^^          ^^ ^^           ^^^^^                  
+>functor : Functor<F>
+>        : ^^^^^^^^^^
+>f : (a: A) => B
+>  : ^ ^^ ^^^^^ 
+>a : A
+>  : ^
+>fa : F
+>   : ^
+
+  return (fa) => functor.map(fa, f);
+>(fa) => functor.map(fa, f) : (fa: F) => F
+>                           : ^  ^^^^^^^^^
+>fa : F
+>   : ^
+>functor.map(fa, f) : F
+>                   : ^
+>functor.map : <A_1, B_1>(fa: F, f: (a: A_1) => B_1) => F
+>            : ^^^^^^^^^^^  ^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^
+>functor : Functor<F>
+>        : ^^^^^^^^^^
+>map : <A_1, B_1>(fa: F, f: (a: A_1) => B_1) => F
+>    : ^^^^^^^^^^^  ^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^
+>fa : F
+>   : ^
+>f : (a: A) => B
+>  : ^ ^^ ^^^^^ 
+}
+
+// Direct method calls with inference
+const r1: Box<number> = boxMonad.pure(42);
+>r1 : Box<number>
+>   : ^^^^^^^^^^^
+>boxMonad.pure(42) : Box<number>
+>                  : ^^^^^^^^^^^
+>boxMonad.pure : <A>(a: A) => Box<A>
+>              : ^ ^^ ^^^^^^^^^^^^^^
+>boxMonad : Monad<any>
+>         : ^^^^^^^^^^
+>pure : <A>(a: A) => Box<A>
+>     : ^ ^^ ^^^^^^^^^^^^^^
+>42 : 42
+>   : ^^
+
+const r2: Box<number> = boxMonad.flatMap({ value: 1 }, x => ({ value: x + 1 }));
+>r2 : Box<number>
+>   : ^^^^^^^^^^^
+>boxMonad.flatMap({ value: 1 }, x => ({ value: x + 1 })) : Box<number>
+>                                                        : ^^^^^^^^^^^
+>boxMonad.flatMap : <A, B>(fa: Box<A>, f: (a: A) => Box<B>) => Box<B>
+>                 : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^
+>boxMonad : Monad<any>
+>         : ^^^^^^^^^^
+>flatMap : <A, B>(fa: Box<A>, f: (a: A) => Box<B>) => Box<B>
+>        : ^ ^^ ^^  ^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^
+>{ value: 1 } : { value: number; }
+>             : ^^^^^^^^^^^^^^^^^^
+>value : number
+>      : ^^^^^^
+>1 : 1
+>  : ^
+>x => ({ value: x + 1 }) : (x: number) => { value: number; }
+>                        : ^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>x : number
+>  : ^^^^^^
+>({ value: x + 1 }) : { value: number; }
+>                   : ^^^^^^^^^^^^^^^^^^
+>{ value: x + 1 } : { value: number; }
+>                 : ^^^^^^^^^^^^^^^^^^
+>value : number
+>      : ^^^^^^
+>x + 1 : number
+>      : ^^^^^^
+>x : number
+>  : ^^^^^^
+>1 : 1
+>  : ^
+
+const r3: string[] = arrayMonad.pure("hello");
+>r3 : string[]
+>   : ^^^^^^^^
+>arrayMonad.pure("hello") : string[]
+>                         : ^^^^^^^^
+>arrayMonad.pure : <A>(a: A) => A[]
+>                : ^ ^^ ^^^^^^^^^^^
+>arrayMonad : Monad<any>
+>           : ^^^^^^^^^^
+>pure : <A>(a: A) => A[]
+>     : ^ ^^ ^^^^^^^^^^^
+>"hello" : "hello"
+>        : ^^^^^^^
+
+// Sequence — success criteria from design doc
+function sequence<F : * -> *, A>(monad: Monad<F>, list: F<A>[]): F<A[]> {
+>sequence : <F, A>(monad: Monad<F>, list: F<A>[]) => F<A[]>
+>         : ^ ^^ ^^     ^^        ^^    ^^      ^^^^^      
+>monad : Monad<F>
+>      : ^^^^^^^^
+>list : F[]
+>     : ^^^
+
+  return list.reduce(
+>list.reduce(    (acc, fa) => monad.flatMap(acc, (arr) => monad.map(fa, (a) => [...arr, a])),    monad.pure([] as A[]),  ) : F
+>                                                                                                                          : ^
+>list.reduce : { (callbackfn: (previousValue: F, currentValue: F, currentIndex: number, array: F[]) => F): F; (callbackfn: (previousValue: F, currentValue: F, currentIndex: number, array: F[]) => F, initialValue: F): F; <U>(callbackfn: (previousValue: U, currentValue: F, currentIndex: number, array: F[]) => U, initialValue: U): U; }
+>            : ^^^          ^^^             ^^^^^            ^^^^^            ^^      ^^     ^^^^^^^^^^^^^^^^^^          ^^^             ^^^^^            ^^^^^            ^^      ^^     ^^^^^^^^^^^^^            ^^^^^^^^^^ ^^          ^^^             ^^^^^            ^^^^^            ^^      ^^     ^^^^^^^^^^^^^            ^^^^^^^^^^
+>list : F[]
+>     : ^^^
+>reduce : { (callbackfn: (previousValue: F, currentValue: F, currentIndex: number, array: F[]) => F): F; (callbackfn: (previousValue: F, currentValue: F, currentIndex: number, array: F[]) => F, initialValue: F): F; <U>(callbackfn: (previousValue: U, currentValue: F, currentIndex: number, array: F[]) => U, initialValue: U): U; }
+>       : ^^^          ^^^             ^^^^^            ^^^^^            ^^      ^^     ^^^^^^^^^^^^^^^^^^          ^^^             ^^^^^            ^^^^^            ^^      ^^     ^^^^^^^^^^^^^            ^^^^^^^^^^ ^^          ^^^             ^^^^^            ^^^^^            ^^      ^^     ^^^^^^^^^^^^^            ^^^^^^^^^^
+
+    (acc, fa) => monad.flatMap(acc, (arr) => monad.map(fa, (a) => [...arr, a])),
+>(acc, fa) => monad.flatMap(acc, (arr) => monad.map(fa, (a) => [...arr, a])) : (acc: F, fa: F) => F
+>                                                                            : ^   ^^^^^  ^^^^^^^^^
+>acc : F
+>    : ^
+>fa : F
+>   : ^
+>monad.flatMap(acc, (arr) => monad.map(fa, (a) => [...arr, a])) : F
+>                                                               : ^
+>monad.flatMap : <A_1, B>(fa: F, f: (a: A_1) => F) => F
+>              : ^^^^^^ ^^  ^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>monad : Monad<F>
+>      : ^^^^^^^^
+>flatMap : <A_1, B>(fa: F, f: (a: A_1) => F) => F
+>        : ^^^^^^ ^^  ^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>acc : F
+>    : ^
+>(arr) => monad.map(fa, (a) => [...arr, a]) : (arr: A[]) => F
+>                                           : ^   ^^^^^^^^^^^
+>arr : A[]
+>    : ^^^
+>monad.map(fa, (a) => [...arr, a]) : F
+>                                  : ^
+>monad.map : <A_1, B>(fa: F, f: (a: A_1) => B) => F
+>          : ^^^^^^ ^^  ^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>monad : Monad<F>
+>      : ^^^^^^^^
+>map : <A_1, B>(fa: F, f: (a: A_1) => B) => F
+>    : ^^^^^^ ^^  ^^^^^ ^^^ ^^^^^^^^^^^^^^^^^
+>fa : F
+>   : ^
+>(a) => [...arr, a] : (a: A) => A[]
+>                   : ^ ^^^^^^^^^^^
+>a : A
+>  : ^
+>[...arr, a] : A[]
+>            : ^^^
+>...arr : A
+>       : ^
+>arr : A[]
+>    : ^^^
+>a : A
+>  : ^
+
+    monad.pure([] as A[]),
+>monad.pure([] as A[]) : F
+>                      : ^
+>monad.pure : <A_1>(a: A_1) => F
+>           : ^^^^^^ ^^^^^^^^^^^
+>monad : Monad<F>
+>      : ^^^^^^^^
+>pure : <A_1>(a: A_1) => F
+>     : ^^^^^^ ^^^^^^^^^^^
+>[] as A[] : A[]
+>          : ^^^
+>[] : never[]
+>   : ^^^^^^^
+
+  );
+}
+const result = sequence(boxMonad, [{ value: 1 }, { value: 2 }, { value: 3 }]);
+>result : Box<unknown[]>
+>       : ^^^^^^^^^^^^^^
+>sequence(boxMonad, [{ value: 1 }, { value: 2 }, { value: 3 }]) : Box<unknown[]>
+>                                                               : ^^^^^^^^^^^^^^
+>sequence : <F, A>(monad: Monad<F>, list: F<A>[]) => F<A[]>
+>         : ^ ^^ ^^     ^^        ^^    ^^      ^^^^^      
+>boxMonad : Monad<any>
+>         : ^^^^^^^^^^
+>[{ value: 1 }, { value: 2 }, { value: 3 }] : { value: number; }[]
+>                                           : ^^^^^^^^^^^^^^^^^^^^
+>{ value: 1 } : { value: number; }
+>             : ^^^^^^^^^^^^^^^^^^
+>value : number
+>      : ^^^^^^
+>1 : 1
+>  : ^
+>{ value: 2 } : { value: number; }
+>             : ^^^^^^^^^^^^^^^^^^
+>value : number
+>      : ^^^^^^
+>2 : 2
+>  : ^
+>{ value: 3 } : { value: number; }
+>             : ^^^^^^^^^^^^^^^^^^
+>value : number
+>      : ^^^^^^
+>3 : 3
+>  : ^
+

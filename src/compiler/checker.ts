@@ -5568,6 +5568,84 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         return createTypeWithSymbol(TypeFlags.TypeParameter, symbol!) as TypeParameter;
     }
 
+    // HKT: Create a type representing a reference to a type constructor (e.g., Array as a value for F : * -> *)
+    function createTypeConstructorRef(constructorSymbol: Symbol): Type {
+        const type = createType(TypeFlags.Substitution) as SubstitutionType;
+        type.baseType = errorType; // Not used directly
+        type.constraint = errorType; // Not used directly
+        type.hktConstructorSymbol = constructorSymbol;
+        return type;
+    }
+
+    // HKT: Create a type representing the application of a type constructor parameter to type arguments (F<A>)
+    function createHKTApplicationType(typeConstructor: TypeParameter, typeArguments: readonly Type[]): Type {
+        const type = createType(TypeFlags.Substitution) as SubstitutionType;
+        type.baseType = typeConstructor;
+        type.constraint = typeConstructor; // Use the constructor itself as constraint (not unknownType, which would trigger NoInfer detection)
+        type.hktTypeArguments = typeArguments;
+        return type;
+    }
+
+    // HKT: Resolve an HKT application after the constructor has been resolved to a concrete type
+    function resolveHKTApplication(constructorType: Type, typeArgs: readonly Type[]): Type {
+        // If the constructor is a TypeConstructorRef, unwrap and instantiate
+        if (constructorType.hktConstructorSymbol) {
+            const symbol = constructorType.hktConstructorSymbol;
+            if (symbol.flags & (SymbolFlags.Class | SymbolFlags.Interface)) {
+                const declaredType = getDeclaredTypeOfSymbol(getMergedSymbol(symbol)) as InterfaceType;
+                if (declaredType.localTypeParameters) {
+                    const outerTypeParams = declaredType.outerTypeParameters;
+                    const fullArgs = outerTypeParams ? concatenate(map(outerTypeParams, () => anyType), typeArgs as Type[]) : typeArgs as Type[];
+                    return createTypeReference(declaredType as GenericType, fullArgs);
+                }
+            }
+            if (symbol.flags & SymbolFlags.TypeAlias) {
+                return getTypeAliasInstantiation(symbol, typeArgs);
+            }
+            return errorType;
+        }
+        // If the constructor is still a type parameter, create another abstract application
+        if (constructorType.flags & TypeFlags.TypeParameter && (constructorType as TypeParameter).kindArity) {
+            return createHKTApplicationType(constructorType as TypeParameter, typeArgs);
+        }
+        return errorType;
+    }
+
+    // HKT: Resolve a type argument that should be a type constructor (e.g., Array for F : * -> *)
+    function resolveTypeConstructorArgument(node: TypeNode, expectedArity: number): Type {
+        if (isTypeReferenceNode(node) && !node.typeArguments) {
+            const symbol = resolveTypeReferenceName(node, SymbolFlags.Type);
+            if (symbol && symbol !== unknownSymbol) {
+                let arity = 0;
+                if (symbol.flags & (SymbolFlags.Class | SymbolFlags.Interface)) {
+                    const declType = getDeclaredTypeOfSymbol(getMergedSymbol(symbol)) as InterfaceType;
+                    arity = length(declType.localTypeParameters);
+                }
+                else if (symbol.flags & SymbolFlags.TypeAlias) {
+                    arity = length(getSymbolLinks(symbol).typeParameters);
+                }
+                else if (symbol.flags & SymbolFlags.TypeParameter) {
+                    // F being passed to G : * -> * — forwarding a type constructor parameter
+                    const typeParam = getDeclaredTypeOfSymbol(symbol) as TypeParameter;
+                    if (typeParam.kindArity === expectedArity) {
+                        return typeParam; // Return the TypeParameter directly for forwarding
+                    }
+                }
+                if (arity === expectedArity) {
+                    return createTypeConstructorRef(symbol);
+                }
+                // TODO: kind mismatch error
+            }
+        }
+        // Also handle the case where the argument is a type parameter reference
+        const resolvedType = getTypeFromTypeNode(node);
+        if (resolvedType.flags & TypeFlags.TypeParameter && (resolvedType as TypeParameter).kindArity === expectedArity) {
+            return resolvedType; // Forward the type parameter as constructor
+        }
+        // Fallback: resolve normally (will likely cause issues, but allows error recovery)
+        return getTypeFromTypeNode(node);
+    }
+
     // A reserved member name starts with two underscores, but the third character cannot be an underscore,
     // @, or #. A third underscore indicates an escaped form of an identifier that started
     // with at least two underscores. The @ character indicates that the name is denoted by a well known ES
@@ -12872,7 +12950,12 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
     function getTypeOfInstantiatedSymbol(symbol: Symbol): Type {
         const links = getSymbolLinks(symbol);
-        return links.type || (links.type = instantiateType(getTypeOfSymbol(links.target!), links.mapper));
+        if (!links.type) {
+            const originalType = getTypeOfSymbol(links.target!);
+            const result = instantiateType(originalType, links.mapper);
+            links.type = result;
+        }
+        return links.type;
     }
 
     function getWriteTypeOfInstantiatedSymbol(symbol: Symbol): Type {
@@ -13599,7 +13682,16 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
     function getDeclaredTypeOfTypeParameter(symbol: Symbol): TypeParameter {
         const links = getSymbolLinks(symbol);
-        return links.declaredType || (links.declaredType = createTypeParameter(symbol));
+        if (!links.declaredType) {
+            const type = createTypeParameter(symbol);
+            // Transfer HKT kind arity from the declaration to the type
+            const decl = symbol.declarations && symbol.declarations[0];
+            if (decl && decl.kind === SyntaxKind.TypeParameter) {
+                type.kindArity = (decl as TypeParameterDeclaration).kindArity;
+            }
+            links.declaredType = type;
+        }
+        return links.declaredType as TypeParameter;
     }
 
     function getDeclaredTypeOfAlias(symbol: Symbol): Type {
@@ -14117,6 +14209,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         const source = resolveDeclaredMembers(type.target);
         const typeParameters = concatenate(source.typeParameters!, [source.thisType!]);
         const typeArguments = getTypeArguments(type);
+        if (some(typeParameters, tp => !!(tp.kindArity && tp.kindArity > 0))) {
+        }
         const paddedTypeArguments = typeArguments.length === typeParameters.length ? typeArguments : concatenate(typeArguments, [type]);
         resolveObjectTypeMembers(type, source, typeParameters, paddedTypeArguments);
     }
@@ -16987,6 +17081,32 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     /**
      * Get type from type-reference that reference to class or interface
      */
+    // HKT: Check if a type reference node is a type argument for a parent type reference
+    // where the corresponding type parameter has kindArity > 0.
+    function isHKTTypeArgumentContext(node: Node): boolean {
+        const parent = node.parent;
+        if (parent && isTypeReferenceNode(parent) && parent.typeArguments) {
+            const index = parent.typeArguments.indexOf(node as TypeNode);
+            if (index >= 0) {
+                const parentSymbol = resolveTypeReferenceName(parent, SymbolFlags.Type, /*ignoreErrors*/ true);
+                if (parentSymbol && parentSymbol !== unknownSymbol) {
+                    let typeParams: readonly TypeParameter[] | undefined;
+                    if (parentSymbol.flags & (SymbolFlags.Class | SymbolFlags.Interface)) {
+                        const parentType = getDeclaredTypeOfSymbol(getMergedSymbol(parentSymbol)) as InterfaceType;
+                        typeParams = parentType.localTypeParameters;
+                    }
+                    else if (parentSymbol.flags & SymbolFlags.TypeAlias) {
+                        typeParams = getSymbolLinks(parentSymbol).typeParameters;
+                    }
+                    if (typeParams && typeParams[index] && typeParams[index].kindArity && typeParams[index].kindArity! > 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     function getTypeFromClassOrInterfaceReference(node: NodeWithTypeArguments, symbol: Symbol): Type {
         const type = getDeclaredTypeOfSymbol(getMergedSymbol(symbol)) as InterfaceType;
         const typeParameters = type.localTypeParameters;
@@ -16996,6 +17116,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             const isJs = isInJSFile(node);
             const isJsImplicitAny = !noImplicitAny && isJs;
             if (!isJsImplicitAny && (numTypeArguments < minTypeArgumentCount || numTypeArguments > typeParameters.length)) {
+                // HKT: if this type is being used as a type constructor argument (e.g., Array in Functor<Array>),
+                // return a TypeConstructorRef instead of erroring about missing type arguments.
+                if (numTypeArguments === 0 && isHKTTypeArgumentContext(node)) {
+                    return createTypeConstructorRef(symbol);
+                }
                 const missingAugmentsTag = isJs && isExpressionWithTypeArguments(node) && !isJSDocAugmentsTag(node.parent);
                 const diag = minTypeArgumentCount === typeParameters.length ?
                     missingAugmentsTag ?
@@ -17018,7 +17143,10 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             // In a type reference, the outer type parameters of the referenced class or interface are automatically
             // supplied as type arguments and the type reference only specifies arguments for the local type parameters
             // of the class or interface.
-            const typeArguments = concatenate(type.outerTypeParameters, fillMissingTypeArguments(typeArgumentsFromTypeReferenceNode(node), typeParameters, minTypeArgumentCount, isJs));
+            const resolvedTypeArgs = resolveTypeArgumentsWithHKT(node, typeParameters);
+            const typeArguments = concatenate(type.outerTypeParameters, fillMissingTypeArguments(resolvedTypeArgs, typeParameters, minTypeArgumentCount, isJs));
+            if (some(typeParameters, tp => !!(tp.kindArity && tp.kindArity > 0))) {
+            }
             return createTypeReference(type as GenericType, typeArguments);
         }
         return checkNoTypeArguments(node, symbol) ? type : errorType;
@@ -17066,6 +17194,10 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             const numTypeArguments = length(node.typeArguments);
             const minTypeArgumentCount = getMinTypeArgumentCount(typeParameters);
             if (numTypeArguments < minTypeArgumentCount || numTypeArguments > typeParameters.length) {
+                // HKT: if this type alias is being used as a type constructor argument, return a TypeConstructorRef
+                if (numTypeArguments === 0 && isHKTTypeArgumentContext(node)) {
+                    return createTypeConstructorRef(symbol);
+                }
                 error(
                     node,
                     minTypeArgumentCount === typeParameters.length ?
@@ -17099,7 +17231,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     }
                 }
             }
-            return getTypeAliasInstantiation(symbol, typeArgumentsFromTypeReferenceNode(node), newAliasSymbol, aliasTypeArguments);
+            return getTypeAliasInstantiation(symbol, resolveTypeArgumentsWithHKT(node, typeParameters), newAliasSymbol, aliasTypeArguments);
         }
         return checkNoTypeArguments(node, symbol) ? type : errorType;
     }
@@ -17175,6 +17307,23 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         // Get type from reference to named type that cannot be generic (enum or type parameter)
         const res = tryGetDeclaredTypeOfSymbol(symbol);
         if (res) {
+            // HKT: if the symbol is a type parameter with kindArity > 0, handle type application
+            if (res.flags & TypeFlags.TypeParameter && (res as TypeParameter).kindArity) {
+                const kindArity = (res as TypeParameter).kindArity!;
+                if (node.typeArguments) {
+                    if (node.typeArguments.length !== kindArity) {
+                        error(node, Diagnostics.Expected_0_type_arguments_but_got_1, kindArity, node.typeArguments.length);
+                        return errorType;
+                    }
+                    // Create an HKT application type: F<A> where F is a type constructor parameter
+                    return createHKTApplicationType(res as TypeParameter, map(node.typeArguments, getTypeFromTypeNode));
+                }
+                else {
+                    // F used without type arguments — valid when forwarding as a type constructor argument.
+                    // Kind checking for bare usage is deferred to checkTypeReferenceNode.
+                    return getRegularTypeOfLiteralType(res);
+                }
+            }
             return checkNoTypeArguments(node, symbol) ? getRegularTypeOfLiteralType(res) : errorType;
         }
         if (symbol.flags & SymbolFlags.Value && isJSDocTypeReference(node)) {
@@ -17405,6 +17554,27 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
     function typeArgumentsFromTypeReferenceNode(node: NodeWithTypeArguments): Type[] | undefined {
         return map(node.typeArguments, getTypeFromTypeNode);
+    }
+
+    // HKT-aware type argument resolution: for type parameters with kindArity > 0,
+    // resolve the argument as a type constructor reference instead of a normal type.
+    function resolveTypeArgumentsWithHKT(node: NodeWithTypeArguments, typeParameters: readonly TypeParameter[]): Type[] | undefined {
+        if (!node.typeArguments) return undefined;
+        const hasHKT = some(typeParameters, tp => !!(tp.kindArity && tp.kindArity > 0));
+        if (!hasHKT) {
+            return map(node.typeArguments, getTypeFromTypeNode);
+        }
+        const result: Type[] = [];
+        for (let i = 0; i < node.typeArguments.length; i++) {
+            const tp = typeParameters[i];
+            if (tp && tp.kindArity && tp.kindArity > 0) {
+                result.push(resolveTypeConstructorArgument(node.typeArguments[i], tp.kindArity));
+            }
+            else {
+                result.push(getTypeFromTypeNode(node.typeArguments[i]));
+            }
+        }
+        return result;
     }
 
     function getTypeFromTypeQueryNode(node: TypeQueryNode): Type {
@@ -20807,8 +20977,18 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     function maybeTypeParameterReference(node: Node) {
-        return !(node.parent.kind === SyntaxKind.TypeReference && (node.parent as TypeReferenceNode).typeArguments && node === (node.parent as TypeReferenceNode).typeName ||
-            node.parent.kind === SyntaxKind.ImportType && (node.parent as ImportTypeNode).typeArguments && node === (node.parent as ImportTypeNode).qualifier);
+        if (node.parent.kind === SyntaxKind.TypeReference && (node.parent as TypeReferenceNode).typeArguments && node === (node.parent as TypeReferenceNode).typeName) {
+            // HKT: F<A> where F is a type parameter with kindArity > 0 IS a type parameter reference
+            const sym = resolveEntityName(node as Identifier, SymbolFlags.Type, /*ignoreErrors*/ true, /*dontResolveAlias*/ false);
+            if (sym && sym.flags & SymbolFlags.TypeParameter) {
+                const tp = getDeclaredTypeOfSymbol(sym) as TypeParameter;
+                if (tp.kindArity && tp.kindArity > 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return !(node.parent.kind === SyntaxKind.ImportType && (node.parent as ImportTypeNode).typeArguments && node === (node.parent as ImportTypeNode).qualifier);
     }
 
     function isTypeParameterPossiblyReferenced(tp: TypeParameter, node: Node) {
@@ -21110,6 +21290,20 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             );
         }
         if (flags & TypeFlags.Substitution) {
+            // HKT: handle type constructor application (F<A>)
+            if (type.hktTypeArguments) {
+                const resolvedConstructor = instantiateType((type as SubstitutionType).baseType, mapper);
+                const resolvedArgs = instantiateTypes(type.hktTypeArguments, mapper);
+                if (resolvedConstructor === (type as SubstitutionType).baseType && resolvedArgs === type.hktTypeArguments) {
+                    return type; // No change
+                }
+                const result = resolveHKTApplication(resolvedConstructor, resolvedArgs);
+                return result;
+            }
+            // HKT: type constructor references don't need further instantiation
+            if (type.hktConstructorSymbol) {
+                return type;
+            }
             const newBaseType = instantiateType((type as SubstitutionType).baseType, mapper);
             if (isNoInferType(type)) {
                 return getNoInferType(newBaseType);
@@ -22321,7 +22515,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 isGenericTupleType(type) ? getNormalizedTupleType(type, writing) :
                 getObjectFlags(type) & ObjectFlags.Reference ? (type as TypeReference).node ? createTypeReference((type as TypeReference).target, getTypeArguments(type as TypeReference)) : getSingleBaseForNonAugmentingSubtype(type) || type :
                 type.flags & TypeFlags.UnionOrIntersection ? getNormalizedUnionOrIntersectionType(type as UnionOrIntersectionType, writing) :
-                type.flags & TypeFlags.Substitution ? writing ? (type as SubstitutionType).baseType : getSubstitutionIntersection(type as SubstitutionType) :
+                type.flags & TypeFlags.Substitution ? (type.hktTypeArguments || type.hktConstructorSymbol) ? type : writing ? (type as SubstitutionType).baseType : getSubstitutionIntersection(type as SubstitutionType) :
                 type.flags & TypeFlags.Simplifiable ? getSimplifiedType(type, writing) :
                 type;
             if (t === type) return t;
@@ -22782,6 +22976,30 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             let target = getNormalizedType(originalTarget, /*writing*/ true);
 
             if (source === target) return Ternary.True;
+
+            // HKT: compare type constructor applications structurally
+            if (source.hktTypeArguments && target.hktTypeArguments &&
+                source.flags & TypeFlags.Substitution && target.flags & TypeFlags.Substitution) {
+                const sourceBase = (source as SubstitutionType).baseType;
+                const targetBase = (target as SubstitutionType).baseType;
+                if (sourceBase === targetBase) {
+                    // Same constructor — compare type arguments (invariantly for now)
+                    const sourceArgs = source.hktTypeArguments;
+                    const targetArgs = target.hktTypeArguments;
+                    if (sourceArgs.length === targetArgs.length) {
+                        let result = Ternary.True;
+                        for (let i = 0; i < sourceArgs.length; i++) {
+                            // Check both directions for invariance
+                            const forward = isRelatedTo(sourceArgs[i], targetArgs[i], recursionFlags, reportErrors, headMessage);
+                            if (!forward) return Ternary.False;
+                            const backward = isRelatedTo(targetArgs[i], sourceArgs[i], recursionFlags);
+                            if (!backward) return Ternary.False;
+                            result &= forward;
+                        }
+                        return result;
+                    }
+                }
+            }
 
             if (relation === identityRelation) {
                 if (source.flags !== target.flags) return Ternary.False;
@@ -26853,6 +27071,21 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     source = getIntersectionType(sources);
                     target = getIntersectionType(targets);
                 }
+            }
+            // HKT: infer from type constructor applications
+            if (target.hktTypeArguments && target.flags & TypeFlags.Substitution) {
+                if (source.hktTypeArguments && source.flags & TypeFlags.Substitution &&
+                    (source as SubstitutionType).baseType === (target as SubstitutionType).baseType) {
+                    // Same constructor — infer from type arguments pairwise
+                    const sourceArgs = source.hktTypeArguments;
+                    const targetArgs = target.hktTypeArguments;
+                    for (let i = 0; i < Math.min(sourceArgs.length, targetArgs.length); i++) {
+                        inferFromTypes(sourceArgs[i], targetArgs[i]);
+                    }
+                    return;
+                }
+                // Different or unknown constructor — can't decompose further for now
+                return;
             }
             if (target.flags & (TypeFlags.IndexedAccess | TypeFlags.Substitution)) {
                 if (isNoInferType(target)) {
@@ -50690,8 +50923,6 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                         //     let a, b
                         //     { let x = 1; a = () => x; }
                         //     { let x = 100; b = () => x; }
-                        //     console.log(a()); // should print '1'
-                        //     console.log(b()); // should print '100'
                         //     OR
                         //   - binding is declared inside loop but not in inside initializer of iteration statement or directly inside loop body
                         //     * variables from initializer are passed to rewritten loop body as parameters so they are not captured directly

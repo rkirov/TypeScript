@@ -1,0 +1,301 @@
+//// [tests/cases/compiler/higherKindedTypesBasic.ts] ////
+
+=== higherKindedTypesBasic.ts ===
+// Basic HKT interfaces
+interface Functor<F : * -> *> {
+>Functor : Symbol(Functor, Decl(higherKindedTypesBasic.ts, 0, 0))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 1, 18))
+
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : Symbol(Functor.map, Decl(higherKindedTypesBasic.ts, 1, 31))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 2, 6))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 2, 8))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 2, 12))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 1, 18))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 2, 6))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 2, 21))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 2, 26))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 2, 6))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 2, 8))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 1, 18))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 2, 8))
+}
+
+interface Monad<F : * -> *> extends Functor<F> {
+>Monad : Symbol(Monad, Decl(higherKindedTypesBasic.ts, 3, 1))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 5, 16))
+>Functor : Symbol(Functor, Decl(higherKindedTypesBasic.ts, 0, 0))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 5, 16))
+
+  pure<A>(a: A): F<A>;
+>pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 6, 7))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 6, 10))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 6, 7))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 5, 16))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 6, 7))
+
+  flatMap<A, B>(fa: F<A>, f: (a: A) => F<B>): F<B>;
+>flatMap : Symbol(Monad.flatMap, Decl(higherKindedTypesBasic.ts, 6, 22))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 7, 10))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 7, 12))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 7, 16))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 5, 16))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 7, 10))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 7, 25))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 7, 30))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 7, 10))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 5, 16))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 7, 12))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 5, 16))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 7, 12))
+}
+
+// Concrete instantiation — Array
+const arrayFunctor: Functor<Array> = {
+>arrayFunctor : Symbol(arrayFunctor, Decl(higherKindedTypesBasic.ts, 11, 5))
+>Functor : Symbol(Functor, Decl(higherKindedTypesBasic.ts, 0, 0))
+>Array : Symbol(Array, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --), Decl(lib.es2015.iterable.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --) ... and 4 more)
+
+  map: (fa, f) => fa.map(f),
+>map : Symbol(map, Decl(higherKindedTypesBasic.ts, 11, 38))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 12, 8))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 12, 11))
+>fa.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 12, 8))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 12, 11))
+
+};
+
+const arrayMonad: Monad<Array> = {
+>arrayMonad : Symbol(arrayMonad, Decl(higherKindedTypesBasic.ts, 15, 5))
+>Monad : Symbol(Monad, Decl(higherKindedTypesBasic.ts, 3, 1))
+>Array : Symbol(Array, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --), Decl(lib.es2015.iterable.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --) ... and 4 more)
+
+  map: (fa, f) => fa.map(f),
+>map : Symbol(map, Decl(higherKindedTypesBasic.ts, 15, 34))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 16, 8))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 16, 11))
+>fa.map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 16, 8))
+>map : Symbol(Array.map, Decl(lib.es5.d.ts, --, --))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 16, 11))
+
+  pure: <A>(a: A): A[] => [a],
+>pure : Symbol(pure, Decl(higherKindedTypesBasic.ts, 16, 28))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 17, 9))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 17, 12))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 17, 9))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 17, 9))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 17, 12))
+
+  flatMap: <A, B>(fa: A[], f: (a: A) => B[]): B[] => fa.flatMap(f),
+>flatMap : Symbol(flatMap, Decl(higherKindedTypesBasic.ts, 17, 30))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 18, 12))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 18, 14))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 18, 18))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 18, 12))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 18, 26))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 18, 31))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 18, 12))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 18, 14))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 18, 14))
+>fa.flatMap : Symbol(Array.flatMap, Decl(lib.es2019.array.d.ts, --, --))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 18, 18))
+>flatMap : Symbol(Array.flatMap, Decl(lib.es2019.array.d.ts, --, --))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 18, 26))
+
+};
+
+// User-defined type constructor
+type Box<A> = { value: A };
+>Box : Symbol(Box, Decl(higherKindedTypesBasic.ts, 19, 2))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 22, 9))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 22, 9))
+
+const boxFunctor: Functor<Box> = {
+>boxFunctor : Symbol(boxFunctor, Decl(higherKindedTypesBasic.ts, 24, 5))
+>Functor : Symbol(Functor, Decl(higherKindedTypesBasic.ts, 0, 0))
+>Box : Symbol(Box, Decl(higherKindedTypesBasic.ts, 19, 2))
+
+  map: (fa, f) => ({ value: f(fa.value) }),
+>map : Symbol(map, Decl(higherKindedTypesBasic.ts, 24, 34))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 25, 8))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 25, 11))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 25, 20))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 25, 11))
+>fa.value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 25, 8))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+
+};
+
+const boxMonad: Monad<Box> = {
+>boxMonad : Symbol(boxMonad, Decl(higherKindedTypesBasic.ts, 28, 5))
+>Monad : Symbol(Monad, Decl(higherKindedTypesBasic.ts, 3, 1))
+>Box : Symbol(Box, Decl(higherKindedTypesBasic.ts, 19, 2))
+
+  map: (fa, f) => ({ value: f(fa.value) }),
+>map : Symbol(map, Decl(higherKindedTypesBasic.ts, 28, 30))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 29, 8))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 29, 11))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 29, 20))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 29, 11))
+>fa.value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 29, 8))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+
+  pure: (a) => ({ value: a }),
+>pure : Symbol(pure, Decl(higherKindedTypesBasic.ts, 29, 43))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 30, 9))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 30, 17))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 30, 9))
+
+  flatMap: (fa, f) => f(fa.value),
+>flatMap : Symbol(flatMap, Decl(higherKindedTypesBasic.ts, 30, 30))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 31, 12))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 31, 15))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 31, 15))
+>fa.value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 31, 12))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 22, 15))
+
+};
+
+// Generic programming over any Monad
+function when<F : * -> *>(monad: Monad<F>, cond: boolean, action: F<void>): F<void> {
+>when : Symbol(when, Decl(higherKindedTypesBasic.ts, 32, 2))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 35, 14))
+>monad : Symbol(monad, Decl(higherKindedTypesBasic.ts, 35, 26))
+>Monad : Symbol(Monad, Decl(higherKindedTypesBasic.ts, 3, 1))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 35, 14))
+>cond : Symbol(cond, Decl(higherKindedTypesBasic.ts, 35, 42))
+>action : Symbol(action, Decl(higherKindedTypesBasic.ts, 35, 57))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 35, 14))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 35, 14))
+
+  return cond ? action : monad.pure(undefined);
+>cond : Symbol(cond, Decl(higherKindedTypesBasic.ts, 35, 42))
+>action : Symbol(action, Decl(higherKindedTypesBasic.ts, 35, 57))
+>monad.pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>monad : Symbol(monad, Decl(higherKindedTypesBasic.ts, 35, 26))
+>pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>undefined : Symbol(undefined)
+}
+when(arrayMonad, true, [undefined]);
+>when : Symbol(when, Decl(higherKindedTypesBasic.ts, 32, 2))
+>arrayMonad : Symbol(arrayMonad, Decl(higherKindedTypesBasic.ts, 15, 5))
+>undefined : Symbol(undefined)
+
+when(boxMonad, true, { value: undefined });
+>when : Symbol(when, Decl(higherKindedTypesBasic.ts, 32, 2))
+>boxMonad : Symbol(boxMonad, Decl(higherKindedTypesBasic.ts, 28, 5))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 39, 22))
+>undefined : Symbol(undefined)
+
+// Generic lift function
+function lift<F : * -> *, A, B>(functor: Functor<F>, f: (a: A) => B): (fa: F<A>) => F<B> {
+>lift : Symbol(lift, Decl(higherKindedTypesBasic.ts, 39, 43))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 42, 14))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 42, 25))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 42, 28))
+>functor : Symbol(functor, Decl(higherKindedTypesBasic.ts, 42, 32))
+>Functor : Symbol(Functor, Decl(higherKindedTypesBasic.ts, 0, 0))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 42, 14))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 42, 52))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 42, 57))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 42, 25))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 42, 28))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 42, 71))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 42, 14))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 42, 25))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 42, 14))
+>B : Symbol(B, Decl(higherKindedTypesBasic.ts, 42, 28))
+
+  return (fa) => functor.map(fa, f);
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 43, 10))
+>functor.map : Symbol(Functor.map, Decl(higherKindedTypesBasic.ts, 1, 31))
+>functor : Symbol(functor, Decl(higherKindedTypesBasic.ts, 42, 32))
+>map : Symbol(Functor.map, Decl(higherKindedTypesBasic.ts, 1, 31))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 43, 10))
+>f : Symbol(f, Decl(higherKindedTypesBasic.ts, 42, 52))
+}
+
+// Direct method calls with inference
+const r1: Box<number> = boxMonad.pure(42);
+>r1 : Symbol(r1, Decl(higherKindedTypesBasic.ts, 47, 5))
+>Box : Symbol(Box, Decl(higherKindedTypesBasic.ts, 19, 2))
+>boxMonad.pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>boxMonad : Symbol(boxMonad, Decl(higherKindedTypesBasic.ts, 28, 5))
+>pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+
+const r2: Box<number> = boxMonad.flatMap({ value: 1 }, x => ({ value: x + 1 }));
+>r2 : Symbol(r2, Decl(higherKindedTypesBasic.ts, 48, 5))
+>Box : Symbol(Box, Decl(higherKindedTypesBasic.ts, 19, 2))
+>boxMonad.flatMap : Symbol(Monad.flatMap, Decl(higherKindedTypesBasic.ts, 6, 22))
+>boxMonad : Symbol(boxMonad, Decl(higherKindedTypesBasic.ts, 28, 5))
+>flatMap : Symbol(Monad.flatMap, Decl(higherKindedTypesBasic.ts, 6, 22))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 48, 42))
+>x : Symbol(x, Decl(higherKindedTypesBasic.ts, 48, 54))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 48, 62))
+>x : Symbol(x, Decl(higherKindedTypesBasic.ts, 48, 54))
+
+const r3: string[] = arrayMonad.pure("hello");
+>r3 : Symbol(r3, Decl(higherKindedTypesBasic.ts, 49, 5))
+>arrayMonad.pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>arrayMonad : Symbol(arrayMonad, Decl(higherKindedTypesBasic.ts, 15, 5))
+>pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+
+// Sequence — success criteria from design doc
+function sequence<F : * -> *, A>(monad: Monad<F>, list: F<A>[]): F<A[]> {
+>sequence : Symbol(sequence, Decl(higherKindedTypesBasic.ts, 49, 46))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 52, 18))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 52, 29))
+>monad : Symbol(monad, Decl(higherKindedTypesBasic.ts, 52, 33))
+>Monad : Symbol(Monad, Decl(higherKindedTypesBasic.ts, 3, 1))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 52, 18))
+>list : Symbol(list, Decl(higherKindedTypesBasic.ts, 52, 49))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 52, 18))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 52, 29))
+>F : Symbol(F, Decl(higherKindedTypesBasic.ts, 52, 18))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 52, 29))
+
+  return list.reduce(
+>list.reduce : Symbol(Array.reduce, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --))
+>list : Symbol(list, Decl(higherKindedTypesBasic.ts, 52, 49))
+>reduce : Symbol(Array.reduce, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --))
+
+    (acc, fa) => monad.flatMap(acc, (arr) => monad.map(fa, (a) => [...arr, a])),
+>acc : Symbol(acc, Decl(higherKindedTypesBasic.ts, 54, 5))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 54, 9))
+>monad.flatMap : Symbol(Monad.flatMap, Decl(higherKindedTypesBasic.ts, 6, 22))
+>monad : Symbol(monad, Decl(higherKindedTypesBasic.ts, 52, 33))
+>flatMap : Symbol(Monad.flatMap, Decl(higherKindedTypesBasic.ts, 6, 22))
+>acc : Symbol(acc, Decl(higherKindedTypesBasic.ts, 54, 5))
+>arr : Symbol(arr, Decl(higherKindedTypesBasic.ts, 54, 37))
+>monad.map : Symbol(Functor.map, Decl(higherKindedTypesBasic.ts, 1, 31))
+>monad : Symbol(monad, Decl(higherKindedTypesBasic.ts, 52, 33))
+>map : Symbol(Functor.map, Decl(higherKindedTypesBasic.ts, 1, 31))
+>fa : Symbol(fa, Decl(higherKindedTypesBasic.ts, 54, 9))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 54, 60))
+>arr : Symbol(arr, Decl(higherKindedTypesBasic.ts, 54, 37))
+>a : Symbol(a, Decl(higherKindedTypesBasic.ts, 54, 60))
+
+    monad.pure([] as A[]),
+>monad.pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>monad : Symbol(monad, Decl(higherKindedTypesBasic.ts, 52, 33))
+>pure : Symbol(Monad.pure, Decl(higherKindedTypesBasic.ts, 5, 48))
+>A : Symbol(A, Decl(higherKindedTypesBasic.ts, 52, 29))
+
+  );
+}
+const result = sequence(boxMonad, [{ value: 1 }, { value: 2 }, { value: 3 }]);
+>result : Symbol(result, Decl(higherKindedTypesBasic.ts, 58, 5))
+>sequence : Symbol(sequence, Decl(higherKindedTypesBasic.ts, 49, 46))
+>boxMonad : Symbol(boxMonad, Decl(higherKindedTypesBasic.ts, 28, 5))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 58, 36))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 58, 50))
+>value : Symbol(value, Decl(higherKindedTypesBasic.ts, 58, 64))
+

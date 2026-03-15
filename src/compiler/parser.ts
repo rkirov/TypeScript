@@ -3956,6 +3956,13 @@ namespace Parser {
         const pos = getNodePos();
         const modifiers = parseModifiers(/*allowDecorators*/ false, /*permitConstAsModifier*/ true);
         const name = parseIdentifier();
+
+        // HKT kind annotation: `F : * -> *`
+        let kindArity: number | undefined;
+        if (parseOptional(SyntaxKind.ColonToken)) {
+            kindArity = parseKindAnnotation();
+        }
+
         let constraint: TypeNode | undefined;
         let expression: Expression | undefined;
         if (parseOptional(SyntaxKind.ExtendsKeyword)) {
@@ -3981,7 +3988,22 @@ namespace Parser {
         const defaultType = parseOptional(SyntaxKind.EqualsToken) ? parseType() : undefined;
         const node = factory.createTypeParameterDeclaration(modifiers, name, constraint, defaultType);
         node.expression = expression;
+        node.kindArity = kindArity;
         return finishNode(node, pos);
+    }
+
+    // Parse a kind annotation like `*`, `* -> *`, `* -> * -> *`.
+    // Returns the arity (number of arrows). `*` = 0, `* -> *` = 1, etc.
+    function parseKindAnnotation(): number {
+        parseExpected(SyntaxKind.AsteriskToken);
+        let arity = 0;
+        while (token() === SyntaxKind.MinusToken) {
+            nextToken(); // consume '-'
+            parseExpected(SyntaxKind.GreaterThanToken); // consume '>'
+            parseExpected(SyntaxKind.AsteriskToken); // consume '*'
+            arity++;
+        }
+        return arity;
     }
 
     function parseTypeParameters(): NodeArray<TypeParameterDeclaration> | undefined {

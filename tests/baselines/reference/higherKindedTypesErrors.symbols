@@ -1,0 +1,83 @@
+//// [tests/cases/compiler/higherKindedTypesErrors.ts] ////
+
+=== higherKindedTypesErrors.ts ===
+interface Functor<F : * -> *> {
+>Functor : Symbol(Functor, Decl(higherKindedTypesErrors.ts, 0, 0))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 0, 18))
+
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : Symbol(Functor.map, Decl(higherKindedTypesErrors.ts, 0, 31))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 1, 6))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 1, 8))
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 1, 12))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 0, 18))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 1, 6))
+>f : Symbol(f, Decl(higherKindedTypesErrors.ts, 1, 21))
+>a : Symbol(a, Decl(higherKindedTypesErrors.ts, 1, 26))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 1, 6))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 1, 8))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 0, 18))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 1, 8))
+}
+
+// Error: wrong number of type arguments to constructor param
+interface BadArity<F : * -> *> {
+>BadArity : Symbol(BadArity, Decl(higherKindedTypesErrors.ts, 2, 1))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 5, 19))
+
+  bar<A, B>(x: F<A, B>): void;  // F expects 1 arg, got 2
+>bar : Symbol(BadArity.bar, Decl(higherKindedTypesErrors.ts, 5, 32))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 6, 6))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 6, 8))
+>x : Symbol(x, Decl(higherKindedTypesErrors.ts, 6, 12))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 5, 19))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 6, 6))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 6, 8))
+}
+
+// Incorrect implementation of an HKT interface
+const badArrayFunctor: Functor<Array> = {
+>badArrayFunctor : Symbol(badArrayFunctor, Decl(higherKindedTypesErrors.ts, 10, 5))
+>Functor : Symbol(Functor, Decl(higherKindedTypesErrors.ts, 0, 0))
+>Array : Symbol(Array, Decl(lib.es5.d.ts, --, --), Decl(lib.es5.d.ts, --, --), Decl(lib.es2015.core.d.ts, --, --), Decl(lib.es2015.iterable.d.ts, --, --), Decl(lib.es2015.symbol.wellknown.d.ts, --, --) ... and 4 more)
+
+  map: (fa, f) => f(fa[0]),  // returns B, not Array<B>
+>map : Symbol(map, Decl(higherKindedTypesErrors.ts, 10, 41))
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 11, 8))
+>f : Symbol(f, Decl(higherKindedTypesErrors.ts, 11, 11))
+>f : Symbol(f, Decl(higherKindedTypesErrors.ts, 11, 11))
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 11, 8))
+
+};
+
+// Invariance: F<A> is not assignable to F<B>
+function bad<F : * -> *, A, B>(fa: F<A>): F<B> {
+>bad : Symbol(bad, Decl(higherKindedTypesErrors.ts, 12, 2))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 15, 13))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 15, 24))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 15, 27))
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 15, 31))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 15, 13))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 15, 24))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 15, 13))
+>B : Symbol(B, Decl(higherKindedTypesErrors.ts, 15, 27))
+
+  return fa;  // Error
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 15, 31))
+}
+
+// Same type argument on both sides is fine
+function fine<F : * -> *, A>(fa: F<A>): F<A> {
+>fine : Symbol(fine, Decl(higherKindedTypesErrors.ts, 17, 1))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 20, 14))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 20, 25))
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 20, 29))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 20, 14))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 20, 25))
+>F : Symbol(F, Decl(higherKindedTypesErrors.ts, 20, 14))
+>A : Symbol(A, Decl(higherKindedTypesErrors.ts, 20, 25))
+
+  return fa;
+>fa : Symbol(fa, Decl(higherKindedTypesErrors.ts, 20, 29))
+}
+
