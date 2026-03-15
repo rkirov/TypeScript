@@ -1836,11 +1836,23 @@ export interface TypeParameterDeclaration extends NamedDeclaration, JSDocContain
     // For error recovery purposes (see `isGrammarError` in utilities.ts).
     expression?: Expression;
 
-    // HKT kind annotation arity (e.g., `F : * -> *` has kindArity 1, `F : * -> * -> *` has kindArity 2).
-    // undefined or 0 means kind `*` (concrete type). Set by parser.
+    // HKT kind annotation. kindArity is the simple arity count (number of * arguments).
+    // kindNode is the full parsed kind tree for validation. Set by parser.
     /** @internal */
     kindArity?: number;
+    /** @internal */
+    kindNode?: KindNode;
 }
+
+// HKT kind representation
+// StarKind = *
+// ArrowKind = (params) -> return  (params is a list; single-element list for `* -> *`)
+/** @internal */
+export type KindNode = StarKind | ArrowKind;
+/** @internal */
+export interface StarKind { readonly kindTag: "star"; }
+/** @internal */
+export interface ArrowKind { readonly kindTag: "arrow"; readonly params: readonly KindNode[]; readonly returnKind: KindNode; }
 
 export interface SignatureDeclarationBase extends NamedDeclaration, JSDocContainer {
     readonly kind: SignatureDeclaration["kind"];

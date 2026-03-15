@@ -1,0 +1,114 @@
+//// [tests/cases/compiler/higherKindedTypesSyntax.ts] ////
+
+=== higherKindedTypesSyntax.ts ===
+// Single-arg kind: * -> * (same as (*) -> *)
+interface Functor<F : * -> *> {
+>Functor : Symbol(Functor, Decl(higherKindedTypesSyntax.ts, 0, 0))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 1, 18))
+
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : Symbol(Functor.map, Decl(higherKindedTypesSyntax.ts, 1, 31))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 2, 6))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 2, 8))
+>fa : Symbol(fa, Decl(higherKindedTypesSyntax.ts, 2, 12))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 1, 18))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 2, 6))
+>f : Symbol(f, Decl(higherKindedTypesSyntax.ts, 2, 21))
+>a : Symbol(a, Decl(higherKindedTypesSyntax.ts, 2, 26))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 2, 6))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 2, 8))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 1, 18))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 2, 8))
+}
+
+// Parenthesized single-arg kind: (*) -> * — identical to * -> *
+interface Functor2<F : (*) -> *> {
+>Functor2 : Symbol(Functor2, Decl(higherKindedTypesSyntax.ts, 3, 1))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 6, 19))
+
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : Symbol(Functor2.map, Decl(higherKindedTypesSyntax.ts, 6, 34))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 7, 6))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 7, 8))
+>fa : Symbol(fa, Decl(higherKindedTypesSyntax.ts, 7, 12))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 6, 19))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 7, 6))
+>f : Symbol(f, Decl(higherKindedTypesSyntax.ts, 7, 21))
+>a : Symbol(a, Decl(higherKindedTypesSyntax.ts, 7, 26))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 7, 6))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 7, 8))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 6, 19))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 7, 8))
+}
+
+// Two-arg kind: (*, *) -> *
+interface Bifunctor<F : (*, *) -> *> {
+>Bifunctor : Symbol(Bifunctor, Decl(higherKindedTypesSyntax.ts, 8, 1))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 11, 20))
+
+  bimap<A, B, C, D>(fa: F<A, B>, f: (a: A) => C, g: (b: B) => D): F<C, D>;
+>bimap : Symbol(Bifunctor.bimap, Decl(higherKindedTypesSyntax.ts, 11, 38))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 12, 8))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 12, 10))
+>C : Symbol(C, Decl(higherKindedTypesSyntax.ts, 12, 13))
+>D : Symbol(D, Decl(higherKindedTypesSyntax.ts, 12, 16))
+>fa : Symbol(fa, Decl(higherKindedTypesSyntax.ts, 12, 20))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 11, 20))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 12, 8))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 12, 10))
+>f : Symbol(f, Decl(higherKindedTypesSyntax.ts, 12, 32))
+>a : Symbol(a, Decl(higherKindedTypesSyntax.ts, 12, 37))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 12, 8))
+>C : Symbol(C, Decl(higherKindedTypesSyntax.ts, 12, 13))
+>g : Symbol(g, Decl(higherKindedTypesSyntax.ts, 12, 48))
+>b : Symbol(b, Decl(higherKindedTypesSyntax.ts, 12, 53))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 12, 10))
+>D : Symbol(D, Decl(higherKindedTypesSyntax.ts, 12, 16))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 11, 20))
+>C : Symbol(C, Decl(higherKindedTypesSyntax.ts, 12, 13))
+>D : Symbol(D, Decl(higherKindedTypesSyntax.ts, 12, 16))
+}
+
+// Higher-order kind should error
+interface Transform<F : (* -> *) -> *> {
+>Transform : Symbol(Transform, Decl(higherKindedTypesSyntax.ts, 13, 1))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 16, 20))
+
+  run(): F<number>;
+>run : Symbol(Transform.run, Decl(higherKindedTypesSyntax.ts, 16, 40))
+>F : Symbol(F, Decl(higherKindedTypesSyntax.ts, 16, 20))
+}
+
+// Concrete usage of two-arg kind
+type Pair<A, B> = { fst: A; snd: B };
+>Pair : Symbol(Pair, Decl(higherKindedTypesSyntax.ts, 18, 1))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 21, 10))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 21, 12))
+>fst : Symbol(fst, Decl(higherKindedTypesSyntax.ts, 21, 19))
+>A : Symbol(A, Decl(higherKindedTypesSyntax.ts, 21, 10))
+>snd : Symbol(snd, Decl(higherKindedTypesSyntax.ts, 21, 27))
+>B : Symbol(B, Decl(higherKindedTypesSyntax.ts, 21, 12))
+
+const pairBifunctor: Bifunctor<Pair> = {
+>pairBifunctor : Symbol(pairBifunctor, Decl(higherKindedTypesSyntax.ts, 23, 5))
+>Bifunctor : Symbol(Bifunctor, Decl(higherKindedTypesSyntax.ts, 8, 1))
+>Pair : Symbol(Pair, Decl(higherKindedTypesSyntax.ts, 18, 1))
+
+  bimap: (fa, f, g) => ({ fst: f(fa.fst), snd: g(fa.snd) }),
+>bimap : Symbol(bimap, Decl(higherKindedTypesSyntax.ts, 23, 40))
+>fa : Symbol(fa, Decl(higherKindedTypesSyntax.ts, 24, 10))
+>f : Symbol(f, Decl(higherKindedTypesSyntax.ts, 24, 13))
+>g : Symbol(g, Decl(higherKindedTypesSyntax.ts, 24, 16))
+>fst : Symbol(fst, Decl(higherKindedTypesSyntax.ts, 24, 25))
+>f : Symbol(f, Decl(higherKindedTypesSyntax.ts, 24, 13))
+>fa.fst : Symbol(fst, Decl(higherKindedTypesSyntax.ts, 21, 19))
+>fa : Symbol(fa, Decl(higherKindedTypesSyntax.ts, 24, 10))
+>fst : Symbol(fst, Decl(higherKindedTypesSyntax.ts, 21, 19))
+>snd : Symbol(snd, Decl(higherKindedTypesSyntax.ts, 24, 41))
+>g : Symbol(g, Decl(higherKindedTypesSyntax.ts, 24, 16))
+>fa.snd : Symbol(snd, Decl(higherKindedTypesSyntax.ts, 21, 27))
+>fa : Symbol(fa, Decl(higherKindedTypesSyntax.ts, 24, 10))
+>snd : Symbol(snd, Decl(higherKindedTypesSyntax.ts, 21, 27))
+
+};
+

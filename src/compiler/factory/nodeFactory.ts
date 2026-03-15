@@ -1628,6 +1628,7 @@ export function createNodeFactory(flags: NodeFactoryFlags, baseFactory: BaseNode
 
         node.expression = undefined; // initialized by parser to report grammar errors
         node.kindArity = undefined; // initialized by parser for HKT kind annotations
+        node.kindNode = undefined; // initialized by parser for HKT kind annotations
         node.jsDoc = undefined; // initialized by parser (JsDocContainer)
         return node;
     }

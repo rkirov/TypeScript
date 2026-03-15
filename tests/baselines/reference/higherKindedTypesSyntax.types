@@ -1,0 +1,110 @@
+//// [tests/cases/compiler/higherKindedTypesSyntax.ts] ////
+
+=== higherKindedTypesSyntax.ts ===
+// Single-arg kind: * -> * (same as (*) -> *)
+interface Functor<F : * -> *> {
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : <A, B>(fa: F<A>, f: (a: A) => B) => F<B>
+>    : ^ ^^ ^^  ^^    ^^ ^^           ^^^^^    
+>fa : F
+>   : ^
+>f : (a: A) => B
+>  : ^ ^^ ^^^^^ 
+>a : A
+>  : ^
+}
+
+// Parenthesized single-arg kind: (*) -> * — identical to * -> *
+interface Functor2<F : (*) -> *> {
+  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
+>map : <A, B>(fa: F<A>, f: (a: A) => B) => F<B>
+>    : ^ ^^ ^^  ^^    ^^ ^^           ^^^^^    
+>fa : F
+>   : ^
+>f : (a: A) => B
+>  : ^ ^^ ^^^^^ 
+>a : A
+>  : ^
+}
+
+// Two-arg kind: (*, *) -> *
+interface Bifunctor<F : (*, *) -> *> {
+  bimap<A, B, C, D>(fa: F<A, B>, f: (a: A) => C, g: (b: B) => D): F<C, D>;
+>bimap : <A, B, C, D>(fa: F<A, B>, f: (a: A) => C, g: (b: B) => D) => F<C, D>
+>      : ^ ^^ ^^ ^^ ^^  ^^       ^^ ^^           ^^ ^^           ^^^^^       
+>fa : F
+>   : ^
+>f : (a: A) => C
+>  : ^ ^^ ^^^^^ 
+>a : A
+>  : ^
+>g : (b: B) => D
+>  : ^ ^^ ^^^^^ 
+>b : B
+>  : ^
+}
+
+// Higher-order kind should error
+interface Transform<F : (* -> *) -> *> {
+  run(): F<number>;
+>run : () => F<number>
+>    : ^^^^^^         
+}
+
+// Concrete usage of two-arg kind
+type Pair<A, B> = { fst: A; snd: B };
+>Pair : Pair<A, B>
+>     : ^^^^^^^^^^
+>fst : A
+>    : ^
+>snd : B
+>    : ^
+
+const pairBifunctor: Bifunctor<Pair> = {
+>pairBifunctor : Bifunctor<any>
+>              : ^^^^^^^^^^^^^^
+>{  bimap: (fa, f, g) => ({ fst: f(fa.fst), snd: g(fa.snd) }),} : { bimap: <A, B, C, D>(fa: Pair<A, B>, f: (a: A) => C, g: (b: B) => D) => { fst: C; snd: D; }; }
+>                                                               : ^^^^^^^^^^ ^^ ^^ ^^ ^^  ^^^^^^^^^^^^^^ ^^^ ^^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  bimap: (fa, f, g) => ({ fst: f(fa.fst), snd: g(fa.snd) }),
+>bimap : <A, B, C, D>(fa: Pair<A, B>, f: (a: A) => C, g: (b: B) => D) => { fst: C; snd: D; }
+>      : ^ ^^ ^^ ^^ ^^  ^^^^^^^^^^^^^^ ^^^ ^^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>(fa, f, g) => ({ fst: f(fa.fst), snd: g(fa.snd) }) : <A, B, C, D>(fa: Pair<A, B>, f: (a: A) => C, g: (b: B) => D) => { fst: C; snd: D; }
+>                                                   : ^ ^^ ^^ ^^ ^^  ^^^^^^^^^^^^^^ ^^^ ^^^^^^^^^^^ ^^^ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>fa : Pair<A, B>
+>   : ^^^^^^^^^^
+>f : (a: A) => C
+>  : ^ ^^^^^^^^^
+>g : (b: B) => D
+>  : ^ ^^^^^^^^^
+>({ fst: f(fa.fst), snd: g(fa.snd) }) : { fst: C; snd: D; }
+>                                     : ^^^^^^^^^^^^^^^^^^^
+>{ fst: f(fa.fst), snd: g(fa.snd) } : { fst: C; snd: D; }
+>                                   : ^^^^^^^^^^^^^^^^^^^
+>fst : C
+>    : ^
+>f(fa.fst) : C
+>          : ^
+>f : (a: A) => C
+>  : ^ ^^^^^^^^^
+>fa.fst : A
+>       : ^
+>fa : Pair<A, B>
+>   : ^^^^^^^^^^
+>fst : A
+>    : ^
+>snd : D
+>    : ^
+>g(fa.snd) : D
+>          : ^
+>g : (b: B) => D
+>  : ^ ^^^^^^^^^
+>fa.snd : B
+>       : ^
+>fa : Pair<A, B>
+>   : ^^^^^^^^^^
+>snd : B
+>    : ^
+
+};
+

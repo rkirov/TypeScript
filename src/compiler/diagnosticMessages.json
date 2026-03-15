@@ -4026,6 +4026,10 @@
         "category": "Error",
         "code": 2883
     },
+    "Higher-order kinds are not yet supported. All kind parameters and return must be '*'.": {
+        "category": "Error",
+        "code": 2900
+    },
 
     "Import declaration '{0}' is using private name '{1}'.": {
         "category": "Error",

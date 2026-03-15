@@ -834,6 +834,7 @@ import {
     JSDocTypeTag,
     JSDocVariadicType,
     JsxAttribute,
+    KindNode,
     JsxAttributeLike,
     JsxAttributeName,
     JsxAttributes,
@@ -42174,11 +42175,32 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
     // DECLARATION AND STATEMENT TYPE CHECKING
 
+    // HKT: check that a kind annotation only uses supported features (no higher-order kinds yet)
+    function checkKindNodeSupported(node: TypeParameterDeclaration, kind: KindNode): void {
+        if (kind.kindTag === "star") return;
+        // ArrowKind: check that return is * and all params are *
+        if (kind.returnKind.kindTag !== "star") {
+            error(node, Diagnostics.Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk);
+            return;
+        }
+        for (const p of kind.params) {
+            if (p.kindTag !== "star") {
+                error(node, Diagnostics.Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk);
+                return;
+            }
+        }
+    }
+
     function checkTypeParameter(node: TypeParameterDeclaration) {
         // Grammar Checking
         checkGrammarModifiers(node);
         if (node.expression) {
             grammarErrorOnFirstToken(node.expression, Diagnostics.Type_expected);
+        }
+
+        // HKT: validate kind annotation — reject higher-order kinds for now
+        if (node.kindNode) {
+            checkKindNodeSupported(node, node.kindNode);
         }
 
         checkSourceElement(node.constraint);

@@ -218,6 +218,7 @@ import {
     JsonMinusNumericLiteral,
     JsonObjectExpressionStatement,
     JsonSourceFile,
+    KindNode,
     JsxAttribute,
     JsxAttributes,
     JsxAttributeValue,
@@ -3957,10 +3958,12 @@ namespace Parser {
         const modifiers = parseModifiers(/*allowDecorators*/ false, /*permitConstAsModifier*/ true);
         const name = parseIdentifier();
 
-        // HKT kind annotation: `F : * -> *`
+        // HKT kind annotation: `F : * -> *`, `F : (*, *) -> *`, etc.
         let kindArity: number | undefined;
+        let kindNode: KindNode | undefined;
         if (parseOptional(SyntaxKind.ColonToken)) {
-            kindArity = parseKindAnnotation();
+            kindNode = parseKind();
+            kindArity = kindNodeToArity(kindNode);
         }
 
         let constraint: TypeNode | undefined;
@@ -3989,19 +3992,70 @@ namespace Parser {
         const node = factory.createTypeParameterDeclaration(modifiers, name, constraint, defaultType);
         node.expression = expression;
         node.kindArity = kindArity;
+        node.kindNode = kindNode;
         return finishNode(node, pos);
     }
 
-    // Parse a kind annotation like `*`, `* -> *`, `* -> * -> *`.
-    // Returns the arity (number of arrows). `*` = 0, `* -> *` = 1, etc.
-    function parseKindAnnotation(): number {
-        parseExpected(SyntaxKind.AsteriskToken);
-        let arity = 0;
-        while (token() === SyntaxKind.MinusToken) {
+    // Parse a kind expression.
+    // Grammar:
+    //   Kind     = AtomKind ('->' Kind)?     // right-associative arrow
+    //   AtomKind = '*' | '(' KindList ')'
+    //   KindList = Kind (',' Kind)*
+    function parseKind(): KindNode {
+        const atom = parseKindAtom();
+        // Check for '->'
+        if (token() === SyntaxKind.MinusToken) {
             nextToken(); // consume '-'
             parseExpected(SyntaxKind.GreaterThanToken); // consume '>'
-            parseExpected(SyntaxKind.AsteriskToken); // consume '*'
-            arity++;
+            const returnKind = parseKind(); // right-associative recursion
+            // atom is a single param; wrap in array
+            return { kindTag: "arrow", params: [atom], returnKind };
+        }
+        return atom;
+    }
+
+    function parseKindAtom(): KindNode {
+        if (parseOptional(SyntaxKind.AsteriskToken)) {
+            return { kindTag: "star" };
+        }
+        if (parseExpected(SyntaxKind.OpenParenToken)) {
+            const first = parseKind();
+            const params: KindNode[] = [first];
+            while (parseOptional(SyntaxKind.CommaToken)) {
+                params.push(parseKind());
+            }
+            parseExpected(SyntaxKind.CloseParenToken);
+            if (params.length === 1) {
+                return first; // (*) is just *, (kind) is just kind
+            }
+            // Tuple of kinds — must be followed by '->' to form an arrow
+            if (token() !== SyntaxKind.MinusToken) {
+                // Error recovery: treat as if -> * was intended
+                return { kindTag: "arrow", params, returnKind: { kindTag: "star" } };
+            }
+            nextToken(); // consume '-'
+            parseExpected(SyntaxKind.GreaterThanToken); // consume '>'
+            const returnKind = parseKind();
+            return { kindTag: "arrow", params, returnKind };
+        }
+        // Error recovery
+        return { kindTag: "star" };
+    }
+
+    // Convert a KindNode to a simple arity (number of * arguments).
+    // Returns undefined if the kind contains non-* arguments or non-* return.
+    function kindNodeToArity(kind: KindNode): number | undefined {
+        if (kind.kindTag === "star") return 0;
+        // Arrow kind: count params that are all *, return must be *
+        let arity = 0;
+        for (const p of kind.params) {
+            if (p.kindTag === "star") {
+                arity++;
+            }
+            else {
+                // Non-star param (higher-order kind) — still count total params for arity
+                arity++;
+            }
         }
         return arity;
     }
