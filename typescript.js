@@ -10221,6 +10221,7 @@ var Diagnostics = {
   Cannot_find_module_or_type_declarations_for_side_effect_import_of_0: diag(2882, 1 /* Error */, "Cannot_find_module_or_type_declarations_for_side_effect_import_of_0_2882", "Cannot find module or type declarations for side-effect import of '{0}'."),
   The_inferred_type_of_0_cannot_be_named_without_a_reference_to_2_from_1_This_is_likely_not_portable_A_type_annotation_is_necessary: diag(2883, 1 /* Error */, "The_inferred_type_of_0_cannot_be_named_without_a_reference_to_2_from_1_This_is_likely_not_portable_A_2883", "The inferred type of '{0}' cannot be named without a reference to '{2}' from '{1}'. This is likely not portable. A type annotation is necessary."),
   Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk: diag(2900, 1 /* Error */, "Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk_2900", "Higher-order kinds are not yet supported. All kind parameters and return must be '*'."),
+  Type_0_has_kind_1_but_kind_2_is_required: diag(2901, 1 /* Error */, "Type_0_has_kind_1_but_kind_2_is_required_2901", "Type '{0}' has kind '{1}', but kind '{2}' is required."),
   Import_declaration_0_is_using_private_name_1: diag(4e3, 1 /* Error */, "Import_declaration_0_is_using_private_name_1_4000", "Import declaration '{0}' is using private name '{1}'."),
   Type_parameter_0_of_exported_class_has_or_is_using_private_name_1: diag(4002, 1 /* Error */, "Type_parameter_0_of_exported_class_has_or_is_using_private_name_1_4002", "Type parameter '{0}' of exported class has or is using private name '{1}'."),
   Type_parameter_0_of_exported_interface_has_or_is_using_private_name_1: diag(4004, 1 /* Error */, "Type_parameter_0_of_exported_interface_has_or_is_using_private_name_1_4004", "Type parameter '{0}' of exported interface has or is using private name '{1}'."),
@@ -54932,14 +54933,19 @@ function createTypeChecker(host) {
       if (symbol && symbol !== unknownSymbol) {
         if (symbol.flags & 262144 /* TypeParameter */) {
           const typeParam = getDeclaredTypeOfSymbol(symbol);
-          if (kindsMatch(expectedKind, getKindOfType(typeParam))) {
+          const actualKind = getKindOfType(typeParam);
+          if (kindsMatch(expectedKind, actualKind)) {
             return typeParam;
           }
+          error2(node, Diagnostics.Type_0_has_kind_1_but_kind_2_is_required, symbolToString(symbol), kindToString(actualKind), kindToString(expectedKind));
+          return errorType;
         } else {
           const actualKind = getKindOfSymbol(symbol);
           if (kindsMatch(expectedKind, actualKind)) {
             return createTypeConstructorRef(symbol);
           }
+          error2(node, Diagnostics.Type_0_has_kind_1_but_kind_2_is_required, symbolToString(symbol), kindToString(actualKind), kindToString(expectedKind));
+          return errorType;
         }
       }
     }
@@ -54947,7 +54953,11 @@ function createTypeChecker(host) {
     if (resolvedType.flags & 524288 /* TypeParameter */ && kindsMatch(expectedKind, getKindOfType(resolvedType))) {
       return resolvedType;
     }
-    return getTypeFromTypeNode(node);
+    if (expectedKind.kindTag !== "star") {
+      error2(node, Diagnostics.Type_0_has_kind_1_but_kind_2_is_required, typeToString(resolvedType), "*", kindToString(expectedKind));
+      return errorType;
+    }
+    return resolvedType;
   }
   function isReservedMemberName(name) {
     return name.charCodeAt(0) === 95 /* _ */ && name.charCodeAt(1) === 95 /* _ */ && name.charCodeAt(2) !== 95 /* _ */ && name.charCodeAt(2) !== 64 /* at */ && name.charCodeAt(2) !== 35 /* hash */;
@@ -65262,13 +65272,24 @@ function createTypeChecker(host) {
     const res = tryGetDeclaredTypeOfSymbol(symbol);
     if (res) {
       if (res.flags & 524288 /* TypeParameter */ && res.kindArity) {
-        const kindArity = res.kindArity;
+        const tp = res;
+        const kindArity = tp.kindArity;
         if (node.typeArguments) {
           if (node.typeArguments.length !== kindArity) {
             error2(node, Diagnostics.Expected_0_type_arguments_but_got_1, kindArity, node.typeArguments.length);
             return errorType;
           }
-          return createHKTApplicationType(res, map(node.typeArguments, getTypeFromTypeNode));
+          const paramKinds = tp.kindNode && tp.kindNode.kindTag === "arrow" ? tp.kindNode.params : void 0;
+          const resolvedArgs = [];
+          for (let i = 0; i < node.typeArguments.length; i++) {
+            const expectedParamKind = paramKinds ? paramKinds[i] : getStarKind();
+            if (expectedParamKind.kindTag !== "star") {
+              resolvedArgs.push(resolveTypeConstructorArgument(node.typeArguments[i], expectedParamKind));
+            } else {
+              resolvedArgs.push(getTypeFromTypeNode(node.typeArguments[i]));
+            }
+          }
+          return createHKTApplicationType(tp, resolvedArgs);
         } else {
           return getRegularTypeOfLiteralType(res);
         }
