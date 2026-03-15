@@ -10,15 +10,21 @@ directly into the type parameter syntax.
 ## Status
 
 **v0 implementation complete.** The success criteria program typechecks end-to-end.
-All 12 test cases pass in the standard test suite. Backward compatibility verified.
+18 test cases pass in the standard test suite. Backward compatibility verified.
+Higher-order kinds (`(* -> *) -> *`) fully supported.
+
+**[Live demo](https://rkirov.github.io/TypeScript/)** — Monaco editor with
+the custom compiler, try it in the browser.
 
 ### What works now
 
-- Kind annotation syntax: `<F : * -> *>`, `<K : * -> * -> *>`
+- Kind annotation syntax: `<F : * -> *>`, `<F : (*, *) -> *>`, `<F : (* -> *) -> *>`
+- Parenthesized single-arg: `(*) -> *` is sugar for `* -> *`
 - Concrete instantiation with built-in types: `Functor<Array>`, `Monad<Array>`
+- Multi-param constructors: `Bifunctor<Pair>` where `Pair` has kind `(*, *) -> *`
 - User-defined type constructors: `Functor<Box>` where `type Box<A> = { value: A }`
-- Type application: `F<A>` where `F` is a type constructor parameter
-- Substitution: `F<A>` resolves to `Array<A>` when `F = Array`
+- Higher-order kinds: `<F : (* -> *) -> *>` — constructors that take constructors
+- Type application: `F<A>` resolves to `Array<A>` when `F = Array`
 - `Monad<F> extends Functor<F>` — HKT params forwarded through inheritance
 - Generic functions: `lift<F : * -> *, A, B>(...)`, `when<F : * -> *>(...)`
 - Type inference at call sites: `boxMonad.pure(42)` infers `Box<number>`
@@ -31,7 +37,6 @@ All 12 test cases pass in the standard test suite. Backward compatibility verifi
 
 - Kind mismatch errors for concrete types passed to HKT params (`Functor<number>`
   silently accepts instead of erroring)
-- Multi-param constructors as HKT arguments (`Map` for `K : * -> * -> *`)
 - Multi-argument HKT inference (`sequence(boxMonad, [{value:1}])` infers
   `Box<unknown[]>` instead of `Box<number[]>` — single-arg inference works)
 - Custom kind-mismatch error messages (uses generic TS errors instead of
@@ -39,36 +44,47 @@ All 12 test cases pass in the standard test suite. Backward compatibility verifi
 
 ## Syntax
 
-Kind annotations use Haskell-style `* -> *` notation, attached to type parameters
-with `:`. This is unambiguous because it only appears inside `<>` type parameter
-lists, where `*` has no existing meaning.
+Kind annotations use uncurried `(params) -> result` notation, attached to type
+parameters with `:`. This is unambiguous because it only appears inside `<>` type
+parameter lists, where `*` has no existing meaning.
+
+```
+Kind     = AtomKind '->' Kind        // right-associative arrow
+         | AtomKind
+
+AtomKind = '*'                        // concrete type
+         | '(' Kind (',' Kind)* ')'   // grouped / tuple
+```
+
+### Examples
 
 ```typescript
-// F is a type constructor that takes one type argument
+// One type argument: * -> *
 interface Functor<F : * -> *> {
   map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
 }
 
-// Concrete instantiation — Array is * -> *
-const arrayFunctor: Functor<Array> = {
-  map: (fa, f) => fa.map(f),
-};
-
-// In generic function signatures
-function lift<F : * -> *, A, B>(
-  functor: Functor<F>,
-  f: (a: A) => B,
-): (fa: F<A>) => F<B> {
-  return (fa) => functor.map(fa, f);
+// Two type arguments: (*, *) -> *
+interface Bifunctor<F : (*, *) -> *> {
+  bimap<A, B, C, D>(fa: F<A, B>, f: (a: A) => C, g: (b: B) => D): F<C, D>;
 }
+
+// Higher-order: takes a type constructor, returns a type
+type ApplyToNumber<F : * -> *> = F<number>;
+type T = ApplyToNumber<Array>;  // number[]
+
+// Takes a type constructor as an argument
+type ApplyToArray<F : (* -> *) -> *> = F<Array>;
 ```
 
 ### Kinding rules
 
 - `*` is the kind of all concrete types (`number`, `string`, `Array<number>`, etc.)
-- `* -> *` is the kind of type constructors taking one argument (`Array`, `Promise`, `Set`)
-- `* -> * -> *` is the kind of two-argument constructors (`Map`, `Either`)
-- Right-associative: `* -> * -> *` means `* -> (* -> *)`
+- `* -> *` is the kind of type constructors taking one argument (`Array`, `Promise`)
+- `(*, *) -> *` is the kind of two-argument constructors (`Map`, `Pair`)
+- `(* -> *) -> *` is the kind of higher-order constructors (take a constructor)
+- `(*) -> *` is sugar for `* -> *`
+- `->` is right-associative: `* -> * -> *` means `* -> (* -> *)`
 
 ## Implementation details
 
@@ -78,9 +94,21 @@ The `->` in kind annotations is parsed at the parser level by consuming `MinusTo
 then `GreaterThanToken` as a pair. This avoids adding a new scanner token and the
 `GreaterThanToken` is consumed before the bracket-closing logic sees it.
 
-Kind information is stored as a simple arity number (`kindArity`) directly on
-`TypeParameterDeclaration` (AST) and `TypeParameter` (resolved type). No new
+Kind information is stored as both a simple arity number (`kindArity`) for fast
+checks and a full kind tree (`KindNode`) for higher-order kind validation. No new
 `SyntaxKind` entries needed.
+
+### Kind representation
+
+```typescript
+type KindNode = StarKind | ArrowKind;
+interface StarKind { kindTag: "star" }
+interface ArrowKind { kindTag: "arrow"; params: KindNode[]; returnKind: KindNode }
+```
+
+The parser produces `KindNode` trees. The checker uses `kindsMatch()` for recursive
+kind comparison and `getKindOfSymbol()` / `getKindOfType()` to compute kinds for
+arbitrary types and symbols.
 
 ### Internal type representations
 
@@ -115,90 +143,45 @@ through the existing instantiation infrastructure.
   type parameter `F` (previously filtered out because `F` had type arguments).
   This was the critical fix that made `getObjectTypeInstantiation` include `F`
   in the outer type parameters, enabling proper member instantiation.
+- **`resolveTypeConstructorArgument`** — uses full `kindsMatch()` for recursive kind
+  checking instead of simple arity equality.
+- **`isHKTTypeArgumentContext`** — handles TypeParameter parents for higher-order
+  kinds (e.g., `F<Array>` where `F : (* -> *) -> *`).
 
 ### Files modified
 
 | File | Changes |
 |------|---------|
-| `src/compiler/types.ts` | `kindArity` on `TypeParameterDeclaration` and `TypeParameter`; `hktConstructorSymbol` and `hktTypeArguments` on `Type` |
-| `src/compiler/parser.ts` | `parseKindAnnotation()`, modified `parseTypeParameter()` |
-| `src/compiler/factory/nodeFactory.ts` | Initialize `kindArity` field |
-| `src/compiler/checker.ts` | ~10 new helper functions, ~8 modified functions (see above) |
+| `src/compiler/types.ts` | `kindArity`, `kindNode` on `TypeParameterDeclaration` and `TypeParameter`; `KindNode` type; `hktConstructorSymbol` and `hktTypeArguments` on `Type` |
+| `src/compiler/parser.ts` | `parseKind()`, `parseKindAtom()`, `kindNodeToArity()`, modified `parseTypeParameter()` |
+| `src/compiler/factory/nodeFactory.ts` | Initialize `kindArity` and `kindNode` fields |
+| `src/compiler/checker.ts` | ~15 new helper functions, ~10 modified functions (see above) |
+| `src/compiler/diagnosticMessages.json` | TS2900 diagnostic (reserved for future kind errors) |
 
 ### Test files
 
 - `tests/cases/compiler/higherKindedTypesBasic.ts` — happy-path tests (Functor, Monad, Array, Box, lift, when, sequence)
 - `tests/cases/compiler/higherKindedTypesErrors.ts` — error cases (arity mismatch, incorrect implementation, invariance)
-
-## Target examples
-
-These should all typecheck after the feature lands.
-
-### Functor + Monad
-
-```typescript
-interface Functor<F : * -> *> {
-  map<A, B>(fa: F<A>, f: (a: A) => B): F<B>;
-}
-
-interface Monad<F : * -> *> {
-  pure<A>(a: A): F<A>;
-  flatMap<A, B>(fa: F<A>, f: (a: A) => F<B>): F<B>;
-}
-
-const arrayMonad: Monad<Array> = {
-  pure: <A>(a: A): A[] => [a],
-  flatMap: <A, B>(fa: A[], f: (a: A) => B[]): B[] => fa.flatMap(f),
-};
-```
-
-### Generic programming over any Monad
-
-```typescript
-function when<F : * -> *>(
-  monad: Monad<F>,
-  cond: boolean,
-  action: F<void>,
-): F<void> {
-  return cond ? action : monad.pure(undefined);
-}
-
-// Works with Array
-when(arrayMonad, true, [undefined]);
-
-// Works with Promise (given a promiseMonad instance)
-when(promiseMonad, true, Promise.resolve());
-```
-
-### User-defined type constructors
-
-```typescript
-type Box<A> = { value: A };
-
-// Box is * -> *, so this should work
-const boxFunctor: Functor<Box> = {
-  map: <A, B>(fa: Box<A>, f: (a: A) => B): Box<B> => ({ value: f(fa.value) }),
-};
-```
-
-### Nested / composed constructors (stretch goal)
-
-```typescript
-// ComposeF<F, G> applies F after G: ComposeF<Array, Box> ~ Array<Box<_>>
-type ComposeF<F : * -> *, G : * -> *, A> = F<G<A>>;
-```
+- `tests/cases/compiler/higherKindedTypesSyntax.ts` — syntax variants (parens, multi-param, higher-order kinds)
 
 ## Design decisions
+
+### Uncurried kind syntax
+
+Unlike Haskell's curried `* -> * -> *`, we use explicit tuple syntax for
+multi-parameter constructors: `(*, *) -> *`. This reflects that TypeScript
+has no partial application of type constructors — you can't partially apply
+`Map<K, V>` to fix `K` and get a `* -> *`.
+
+The arrow is right-associative, so `* -> * -> *` means `* -> (* -> *)` —
+a constructor that takes a `*` and returns a `* -> *`. This is a higher-order
+kind and works correctly.
 
 ### Assignability of `F<A>` inside abstract bodies — invariant
 
 When `F` is an abstract type constructor parameter, `F<A>` is assignable to `F<B>`
 **only if `A` and `B` are mutually assignable**. This mirrors how ordinary type
-parameters work today: in `function f<A, B>(a: A): B { return a; }`, the assignment
-fails because `A` and `B` are unrelated — even though at some call site they might
-both be `string`. Same principle, lifted one kind level.
-
-Concretely:
+parameters work today.
 
 ```typescript
 // Error: Type 'A' is not assignable to type 'B'.
@@ -210,42 +193,15 @@ function bad<F : * -> *, A, B>(fa: F<A>): F<B> {
 function fine<F : * -> *, A>(fa: F<A>): F<A> {
   return fa;
 }
-
-// OK — map transforms the inner type via a function the caller provides.
-function map<F : * -> *, A, B>(
-  functor: Functor<F>,
-  fa: F<A>,
-  f: (a: A) => B,
-): F<B> {
-  return functor.map(fa, f);
-}
 ```
 
-This is deliberately conservative. Covariant assumptions (`F<Cat>` assignable to
-`F<Animal>`) would be unsound for contravariant type constructors (e.g.,
-`type Predicate<A> = (a: A) => boolean`). Invariance is the safe default and
-matches the principle of least surprise for anyone familiar with how TS generics
-already work.
-
-Future work could add variance annotations (`<F : * -> * out>` for covariant,
-`<F : * -> * in>` for contravariant) to relax this where it's provably safe.
+Invariance is the safe default. Covariant assumptions would be unsound for
+contravariant type constructors (e.g., `type Predicate<A> = (a: A) => boolean`).
 
 ### Runtime semantics — pure erasure
 
 `F` is a type-level construct only. It has no runtime presence, just like ordinary
 type parameters. You cannot reference `F` in expression position.
-
-```typescript
-function broken<F : * -> *, A>(a: A): F<A> {
-  // Error: 'F' only refers to a type, but is being used as a value here.
-  return new F(a);
-}
-
-// The only way to produce F<A> values is from arguments or helper functions:
-function works<F : * -> *, A>(monad: Monad<F>, a: A): F<A> {
-  return monad.pure(a);  // OK — pure returns F<A>
-}
-```
 
 ## Next steps
 
@@ -253,17 +209,13 @@ function works<F : * -> *, A>(monad: Monad<F>, a: A): F<A> {
 
 - [ ] Kind mismatch errors when passing concrete types to HKT params
       (`Functor<number>` → `Type 'number' has kind '*', but kind '* -> *' is required`)
-- [ ] Kind mismatch errors for arity mismatches at the type-argument level
-      (`Functor<Map>` → `Type 'Map' has kind '* -> * -> *', but kind '* -> *' is required`)
 - [ ] Error when using bare `F` as a concrete type (`value: F` in an interface body)
 - [ ] Custom diagnostic codes and messages (currently reuses generic TS diagnostics)
 
-### v0.2 — Multi-param kinds and inference
+### v0.2 — Inference
 
-- [ ] `* -> * -> *` constructors as HKT arguments (`Map` for `K : * -> * -> *`)
-- [ ] Multi-argument inference for HKT applications (decompose `{ value: 1 }`
+- [ ] Multi-argument HKT inference (decompose `{ value: 1 }`
       into `Box<number>` to infer `A = number`)
-- [ ] Nested HKT applications (`ComposeF<Array, Box, number>` → `Array<Box<number>>`)
 
 ### v0.3 — Polish
 
@@ -276,7 +228,6 @@ function works<F : * -> *, A>(monad: Monad<F>, a: A): F<A> {
 
 - Partial application of multi-param constructors
 - Kind polymorphism (`<F : k -> *>`)
-- Higher-order kinds (`<F : (* -> *) -> *>`)
 - Variance annotations on HKT params (`<F : * -> * out>`)
 - Constraint combining (`<F : * -> * extends Iterable>`)
 - JSDoc support
