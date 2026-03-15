@@ -5569,6 +5569,77 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         return createTypeWithSymbol(TypeFlags.TypeParameter, symbol!) as TypeParameter;
     }
 
+    // HKT kind utilities
+    function getStarKind(): KindNode { return { kindTag: "star" }; }
+
+    function kindsMatch(expected: KindNode, actual: KindNode): boolean {
+        if (expected.kindTag === "star" && actual.kindTag === "star") return true;
+        if (expected.kindTag === "arrow" && actual.kindTag === "arrow") {
+            if (expected.params.length !== actual.params.length) return false;
+            for (let i = 0; i < expected.params.length; i++) {
+                if (!kindsMatch(expected.params[i], actual.params[i])) return false;
+            }
+            return kindsMatch(expected.returnKind, actual.returnKind);
+        }
+        return false;
+    }
+
+    function getKindOfType(type: Type): KindNode {
+        // Type parameter with explicit kind annotation
+        if (type.flags & TypeFlags.TypeParameter && (type as TypeParameter).kindNode) {
+            return (type as TypeParameter).kindNode!;
+        }
+        // Type parameter with arity but no full kind node (legacy)
+        if (type.flags & TypeFlags.TypeParameter && (type as TypeParameter).kindArity) {
+            const arity = (type as TypeParameter).kindArity!;
+            return { kindTag: "arrow", params: Array(arity).fill(getStarKind()), returnKind: getStarKind() };
+        }
+        // Concrete type — kind *
+        return getStarKind();
+    }
+
+    function getKindOfSymbol(symbol: Symbol): KindNode {
+        if (symbol.flags & (SymbolFlags.Class | SymbolFlags.Interface)) {
+            const declType = getDeclaredTypeOfSymbol(getMergedSymbol(symbol)) as InterfaceType;
+            const arity = length(declType.localTypeParameters);
+            if (arity === 0) return getStarKind();
+            // Build kind from the type parameters' own kinds
+            const params: KindNode[] = [];
+            for (const tp of declType.localTypeParameters!) {
+                params.push(getKindOfType(tp));
+            }
+            return { kindTag: "arrow", params, returnKind: getStarKind() };
+        }
+        if (symbol.flags & SymbolFlags.TypeAlias) {
+            const typeParams = getSymbolLinks(symbol).typeParameters;
+            const arity = length(typeParams);
+            if (arity === 0) return getStarKind();
+            const params: KindNode[] = [];
+            for (const tp of typeParams!) {
+                params.push(getKindOfType(tp));
+            }
+            return { kindTag: "arrow", params, returnKind: getStarKind() };
+        }
+        if (symbol.flags & SymbolFlags.TypeParameter) {
+            const typeParam = getDeclaredTypeOfSymbol(symbol) as TypeParameter;
+            return getKindOfType(typeParam);
+        }
+        return getStarKind();
+    }
+
+    function kindToString(kind: KindNode): string {
+        if (kind.kindTag === "star") return "*";
+        const params = kind.params;
+        const ret = kindToString(kind.returnKind);
+        if (params.length === 1) {
+            const p = kindToString(params[0]);
+            // Wrap in parens if the param is itself an arrow
+            const paramStr = params[0].kindTag === "arrow" ? `(${p})` : p;
+            return `${paramStr} -> ${ret}`;
+        }
+        return `(${params.map(kindToString).join(", ")}) -> ${ret}`;
+    }
+
     // HKT: Create a type representing a reference to a type constructor (e.g., Array as a value for F : * -> *)
     function createTypeConstructorRef(constructorSymbol: Symbol): Type {
         const type = createType(TypeFlags.Substitution) as SubstitutionType;
@@ -5613,35 +5684,30 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     // HKT: Resolve a type argument that should be a type constructor (e.g., Array for F : * -> *)
-    function resolveTypeConstructorArgument(node: TypeNode, expectedArity: number): Type {
+    function resolveTypeConstructorArgument(node: TypeNode, expectedKind: KindNode): Type {
         if (isTypeReferenceNode(node) && !node.typeArguments) {
             const symbol = resolveTypeReferenceName(node, SymbolFlags.Type);
             if (symbol && symbol !== unknownSymbol) {
-                let arity = 0;
-                if (symbol.flags & (SymbolFlags.Class | SymbolFlags.Interface)) {
-                    const declType = getDeclaredTypeOfSymbol(getMergedSymbol(symbol)) as InterfaceType;
-                    arity = length(declType.localTypeParameters);
-                }
-                else if (symbol.flags & SymbolFlags.TypeAlias) {
-                    arity = length(getSymbolLinks(symbol).typeParameters);
-                }
-                else if (symbol.flags & SymbolFlags.TypeParameter) {
+                if (symbol.flags & SymbolFlags.TypeParameter) {
                     // F being passed to G : * -> * — forwarding a type constructor parameter
                     const typeParam = getDeclaredTypeOfSymbol(symbol) as TypeParameter;
-                    if (typeParam.kindArity === expectedArity) {
-                        return typeParam; // Return the TypeParameter directly for forwarding
+                    if (kindsMatch(expectedKind, getKindOfType(typeParam))) {
+                        return typeParam;
                     }
                 }
-                if (arity === expectedArity) {
-                    return createTypeConstructorRef(symbol);
+                else {
+                    const actualKind = getKindOfSymbol(symbol);
+                    if (kindsMatch(expectedKind, actualKind)) {
+                        return createTypeConstructorRef(symbol);
+                    }
                 }
                 // TODO: kind mismatch error
             }
         }
         // Also handle the case where the argument is a type parameter reference
         const resolvedType = getTypeFromTypeNode(node);
-        if (resolvedType.flags & TypeFlags.TypeParameter && (resolvedType as TypeParameter).kindArity === expectedArity) {
-            return resolvedType; // Forward the type parameter as constructor
+        if (resolvedType.flags & TypeFlags.TypeParameter && kindsMatch(expectedKind, getKindOfType(resolvedType as TypeParameter))) {
+            return resolvedType;
         }
         // Fallback: resolve normally (will likely cause issues, but allows error recovery)
         return getTypeFromTypeNode(node);
@@ -13685,10 +13751,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         const links = getSymbolLinks(symbol);
         if (!links.declaredType) {
             const type = createTypeParameter(symbol);
-            // Transfer HKT kind arity from the declaration to the type
+            // Transfer HKT kind info from the declaration to the type
             const decl = symbol.declarations && symbol.declarations[0];
             if (decl && decl.kind === SyntaxKind.TypeParameter) {
                 type.kindArity = (decl as TypeParameterDeclaration).kindArity;
+                type.kindNode = (decl as TypeParameterDeclaration).kindNode;
             }
             links.declaredType = type;
         }
@@ -17091,12 +17158,25 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             if (index >= 0) {
                 const parentSymbol = resolveTypeReferenceName(parent, SymbolFlags.Type, /*ignoreErrors*/ true);
                 if (parentSymbol && parentSymbol !== unknownSymbol) {
+                    // Check if the parent's type parameter at this index has a non-* kind
+                    if (parentSymbol.flags & SymbolFlags.TypeParameter) {
+                        // Parent is a type constructor param (e.g., F<Array> where F : (* -> *) -> *)
+                        const tp = getDeclaredTypeOfSymbol(parentSymbol) as TypeParameter;
+                        if (tp.kindNode && tp.kindNode.kindTag === "arrow" && index < tp.kindNode.params.length) {
+                            const paramKind = tp.kindNode.params[index];
+                            return paramKind.kindTag !== "star";
+                        }
+                        // Fallback: if kindArity > 0 but no kindNode, all params are *
+                        // so the argument should be *, not a constructor — return false
+                        return false;
+                    }
                     let typeParams: readonly TypeParameter[] | undefined;
                     if (parentSymbol.flags & (SymbolFlags.Class | SymbolFlags.Interface)) {
                         const parentType = getDeclaredTypeOfSymbol(getMergedSymbol(parentSymbol)) as InterfaceType;
                         typeParams = parentType.localTypeParameters;
                     }
                     else if (parentSymbol.flags & SymbolFlags.TypeAlias) {
+                        getDeclaredTypeOfSymbol(parentSymbol);
                         typeParams = getSymbolLinks(parentSymbol).typeParameters;
                     }
                     if (typeParams && typeParams[index] && typeParams[index].kindArity && typeParams[index].kindArity! > 0) {
@@ -17569,7 +17649,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         for (let i = 0; i < node.typeArguments.length; i++) {
             const tp = typeParameters[i];
             if (tp && tp.kindArity && tp.kindArity > 0) {
-                result.push(resolveTypeConstructorArgument(node.typeArguments[i], tp.kindArity));
+                const expectedKind = tp.kindNode || { kindTag: "arrow" as const, params: Array(tp.kindArity).fill(getStarKind()), returnKind: getStarKind() };
+                result.push(resolveTypeConstructorArgument(node.typeArguments[i], expectedKind));
             }
             else {
                 result.push(getTypeFromTypeNode(node.typeArguments[i]));
@@ -42176,19 +42257,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     // DECLARATION AND STATEMENT TYPE CHECKING
 
     // HKT: check that a kind annotation only uses supported features (no higher-order kinds yet)
-    function checkKindNodeSupported(node: TypeParameterDeclaration, kind: KindNode): void {
-        if (kind.kindTag === "star") return;
-        // ArrowKind: check that return is * and all params are *
-        if (kind.returnKind.kindTag !== "star") {
-            error(node, Diagnostics.Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk);
-            return;
-        }
-        for (const p of kind.params) {
-            if (p.kindTag !== "star") {
-                error(node, Diagnostics.Higher_order_kinds_are_not_yet_supported_All_kind_parameters_and_return_must_be_Asterisk);
-                return;
-            }
-        }
+    function checkKindNodeSupported(_node: TypeParameterDeclaration, _kind: KindNode): void {
+        // All kinds are now supported — higher-order kinds included.
     }
 
     function checkTypeParameter(node: TypeParameterDeclaration) {

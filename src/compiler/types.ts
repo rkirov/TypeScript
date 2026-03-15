@@ -6901,6 +6901,8 @@ export interface TypeParameter extends InstantiableType {
     resolvedDefaultType?: Type;
     /** @internal */
     kindArity?: number;  // HKT kind arity: 0 or undefined = *, 1 = * -> *, 2 = * -> * -> *, etc.
+    /** @internal */
+    kindNode?: KindNode;  // Full kind tree for higher-order kind checking
 }
 
 /** @internal */
